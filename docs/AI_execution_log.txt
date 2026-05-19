@@ -1,0 +1,60 @@
+架构核心原则
+整体采用单模块 + 包结构分层，不引入 Gradle 多模块。数据流方向严格单向：Room → Repository → ViewModel → Compose UI，禁止反向依赖。
+几个关键设计选择
+
+Widget 同步：没有直接监听 Flow 刷新 Widget（太耗电），而是在 Repository 写入后手动触发 WidgetSyncWorker，Widget 用独立的 WidgetDataProvider 做一次性查询，与主流程解耦。
+UiState + Channel 双轨：持久状态（列表、加载中）放 StateFlow<UiState>，一次性事件（导航、Toast）走 Channel<UiEvent>，避免重组时重复触发副作用。
+Repository 职责边界：只做数据聚合和 Entity↔Model 映射，不含任何 if/when 业务判断逻辑，过滤/排序逻辑在 ViewModel 的 combine 中处理。
+禁止 UseCase 层：个人项目 Repository 已足够薄，强行加 UseCase 只会增加文件数量而不增加可维护性。
+每模块 README 模板：包含「AI 开发提示」字段，帮助 AI 协同时快速定位修改范围。
+
+
+
+
+已按 docs/Architecture.md 的包分层思路，搭好 Gradle 多模块基础工程（无业务功能代码）。当前环境无法从 services.gradle.org 拉取 Gradle 发行包，本地需在 Android Studio 中同步/构建。
+
+模块结构
+模块	对应 Architecture	职责
+:app
+应用入口 + di/
+Hilt、MainActivity、Room 注入
+:core:common
+共享基础
+协程 GoalWallDispatchers
+:core:model
+data/model
+UI 数据模型（待实现）
+:core:database
+data/db
+Room + 占位表
+:core:data
+data/repository
+Repository（待实现）
+:core:designsystem
+ui/theme
+Compose Material3 主题
+:core:navigation
+ui/navigation
+Screen + GoalWallNavHost
+每个模块均有 README.md。
+
+已配置项
+Version Catalog — gradle/libs.versions.toml（Compose BOM、Room、Hilt、Navigation、WorkManager、Glance 等）
+Hilt — @HiltAndroidApp、DatabaseModule、DispatchersModule
+Compose — app、designsystem、navigation 启用 Compose
+Room — KSP、GoalWallDatabase、schema 导出目录 core/database/schemas/
+Navigation — navigation-compose，Screen.Home + 空壳 NavHost
+依赖方向
+app → navigation → designsystem → common
+app → data → database, model → common
+本地构建
+# 配置 SDK（若尚无 local.properties）
+# sdk.dir=C\:\\Users\\...\\AppData\\Local\\Android\\Sdk
+.\gradlew.bat :app:assembleDebug
+或在 Android Studio 中 Open 项目并 Sync。
+
+说明
+无业务代码：无 Goal/Repository/Screen 等业务实现；Room 仅保留内部 SchemaPlaceholderEntity，便于编译，接入真实 Entity 后删除。
+Architecture.md §2 写的是单模块；本次按你的要求做成 多模块，并与文档中的包职责一一对应。
+首次构建会下载 Gradle 8.9；若网络慢，可在 gradle/wrapper/gradle-wrapper.properties 中把 networkTimeout 调大（已设为 120s）。
+下一步可在 :core:database 增加 GoalEntity / DAO，在 :core:data 实现 Repository，再在 GoalWallNavHost 注册功能路由。需要我继续做 Phase 2（Room 实体 + 空 Repository）可以说一下。
