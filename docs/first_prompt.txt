@@ -1,0 +1,51 @@
+你是一名资深 Android 架构师。
+
+请为 Android 原生 App「GoalWall」设计完整工程架构。
+
+技术栈固定为：
+
+- Kotlin
+- Jetpack Compose
+- Room
+- MVVM
+- StateFlow
+- Hilt
+- WorkManager
+- Glance Widget
+
+请输出：
+
+1. 项目目录结构
+2. 模块划分
+3. 数据流设计
+4. Widget 同步方案
+5. Repository 设计
+6. Room 数据结构
+7. ViewModel 设计
+8. 状态管理方案
+9. 通知系统设计
+10. 后续扩展性设计
+
+要求：
+
+- 面向个人开发
+- 结构清晰
+- 易于 AI 协同开发
+- 不要过度设计
+- 不要 Clean Architecture 过度复杂化
+
+请严格遵循：
+
+- 单 Activity 架构
+- Compose Navigation
+- UI State immutable
+- Repository 仅负责数据聚合
+- ViewModel 不直接访问 Room
+- 禁止过度抽象
+- 禁止 usecase 层泛滥
+- 优先可维护性
+- 优先 AI 可读性
+- 文件职责单一
+- 每个模块 README.md
+
+最终输出为 Architecture.md 文档。
