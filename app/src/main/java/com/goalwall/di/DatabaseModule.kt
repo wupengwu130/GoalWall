@@ -2,7 +2,7 @@ package com.goalwall.di
 
 import android.content.Context
 import androidx.room.Room
-import com.goalwall.core.database.GoalWallDatabase
+import com.goalwall.data.db.GoalWallDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

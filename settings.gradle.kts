@@ -23,9 +23,3 @@ dependencyResolutionManagement {
 rootProject.name = "GoalWall"
 
 include(":app")
-include(":core:common")
-include(":core:model")
-include(":core:database")
-include(":core:data")
-include(":core:designsystem")
-include(":core:navigation")

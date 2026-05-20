@@ -1,6 +1,6 @@
 package com.goalwall.di
 
-import com.goalwall.core.common.GoalWallDispatchers
+import com.goalwall.common.GoalWallDispatchers
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

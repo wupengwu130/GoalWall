@@ -1,0 +1,100 @@
+# GoalWall detekt — AI 协同开发护栏（Task 1.4）
+# 默认关闭全量规则，仅启用必要检查，避免误报阻碍开发。
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+processors:
+  active: true
+
+console-reports:
+  active: true
+
+comments:
+  active: false
+
+complexity:
+  active: true
+  LongMethod:
+    active: true
+    threshold: 80
+  LargeClass:
+    active: true
+    threshold: 600
+  ComplexMethod:
+    active: true
+    threshold: 15
+  TooManyFunctions:
+    active: false
+  LongParameterList:
+    active: false
+
+style:
+  active: true
+  MagicNumber:
+    active: true
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+      - '3'
+      - '4'
+      - '8'
+      - '16'
+      - '32'
+      - '64'
+      - '100'
+      - '255'
+      - '1000'
+    excludes:
+      - '**/ui/theme/**'
+  WildcardImport:
+    active: true
+  MaxLineLength:
+    active: true
+    maxLineLength: 120
+    excludePackageStatements: true
+    excludeImportStatements: true
+    excludeCommentStatements: true
+  # --- architecture: ui 层禁止直达 data/db、repository、Room ---
+  ForbiddenImport:
+    active: true
+    imports:
+      - 'androidx.room'
+      - 'com.goalwall.data.db'
+      - 'com.goalwall.data.repository'
+    excludes:
+      - '**/data/**'
+      - '**/di/**'
+      - '**/worker/**'
+      - '**/widget/**'
+      - '**/notification/**'
+      - '**/common/**'
+      - '**/domain/**'
+
+naming:
+  active: true
+  FunctionNaming:
+    active: true
+    functionPattern: '[a-z][a-zA-Z0-9]*'
+    ignoreAnnotated:
+      - 'Composable'
+      - 'androidx.compose.runtime.Composable'
+      - 'Preview'
+      - 'androidx.compose.ui.tooling.preview.Preview'
+  VariableNaming:
+    active: true
+    variablePattern: '[a-z][A-Za-z0-9]*'
+
+potential-bugs:
+  active: true
+  UnsafeCallOnNullableType:
+    active: true
+
+# Compose：@Composable / @Preview 使用 PascalCase 函数名，由 FunctionNaming.ignoreAnnotated 放行

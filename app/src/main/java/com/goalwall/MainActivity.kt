@@ -6,8 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import com.goalwall.core.designsystem.theme.GoalWallTheme
-import com.goalwall.core.navigation.GoalWallNavHost
+import com.goalwall.ui.navigation.GoalWallNavHost
+import com.goalwall.ui.theme.GoalWallTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
