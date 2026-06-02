@@ -9,7 +9,6 @@ import javax.inject.Inject
 
 @HiltAndroidApp
 class GoalWallApp : Application(), Configuration.Provider {
-
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -19,7 +18,8 @@ class GoalWallApp : Application(), Configuration.Provider {
     }
 
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .build()
+        get() =
+            Configuration.Builder()
+                .setWorkerFactory(workerFactory)
+                .build()
 }

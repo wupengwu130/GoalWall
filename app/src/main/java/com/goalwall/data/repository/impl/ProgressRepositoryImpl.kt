@@ -9,11 +9,15 @@ import javax.inject.Singleton
 
 @Suppress("UnusedPrivateProperty")
 @Singleton
-class ProgressRepositoryImpl @Inject constructor(
-    private val progressDao: ProgressDao,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
-) : ProgressRepository {
-
-    override suspend fun recordProgress(goalId: Long, value: Float, note: String) =
-        TODO("Not yet implemented")
-}
+class ProgressRepositoryImpl
+    @Inject
+    constructor(
+        private val progressDao: ProgressDao,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    ) : ProgressRepository {
+        override suspend fun recordProgress(
+            goalId: Long,
+            value: Float,
+            note: String,
+        ) = TODO("Not yet implemented")
+    }

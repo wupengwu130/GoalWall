@@ -5,5 +5,6 @@ package com.goalwall.data.repository
  */
 interface UserPreferencesRepository {
     suspend fun setReminderEnabled(enabled: Boolean)
+
     suspend fun setThemeMode(mode: String)
 }

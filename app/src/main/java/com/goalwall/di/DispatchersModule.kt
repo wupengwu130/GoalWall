@@ -11,7 +11,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DispatchersModule {
-
     @Provides
     @Singleton
     fun provideDispatchers(): GoalWallDispatchers = GoalWallDispatchers()

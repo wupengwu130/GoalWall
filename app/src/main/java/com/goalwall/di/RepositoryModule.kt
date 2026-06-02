@@ -15,7 +15,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class RepositoryModule {
-
     @Binds
     @Singleton
     abstract fun bindGoalRepository(impl: GoalRepositoryImpl): GoalRepository
@@ -26,7 +25,5 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindUserPreferencesRepository(
-        impl: UserPreferencesRepositoryImpl,
-    ): UserPreferencesRepository
+    abstract fun bindUserPreferencesRepository(impl: UserPreferencesRepositoryImpl): UserPreferencesRepository
 }

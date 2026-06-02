@@ -5,7 +5,6 @@
 package com.goalwall.di
 
 object WorkerModule {
-
     object Tags {
         const val REMINDER = "reminder"
         const val DAILY_RESET = "daily_reset"

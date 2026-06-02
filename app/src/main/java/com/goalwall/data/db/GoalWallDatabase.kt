@@ -20,6 +20,8 @@ import com.goalwall.data.db.entity.ProgressEntity
 )
 abstract class GoalWallDatabase : RoomDatabase() {
     abstract fun goalDao(): GoalDao
+
     abstract fun milestoneDao(): MilestoneDao
+
     abstract fun progressDao(): ProgressDao
 }

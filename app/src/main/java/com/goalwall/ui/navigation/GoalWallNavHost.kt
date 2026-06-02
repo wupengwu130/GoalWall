@@ -12,6 +12,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
+@Suppress("FunctionName")
 @Composable
 fun GoalWallNavHost(
     modifier: Modifier = Modifier,
@@ -29,6 +30,7 @@ fun GoalWallNavHost(
     }
 }
 
+@Suppress("FunctionName")
 @Composable
 private fun NavigationShell() {
     Box(

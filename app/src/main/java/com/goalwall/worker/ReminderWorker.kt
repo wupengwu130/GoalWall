@@ -1,7 +1,3 @@
-// Package: com.goalwall.worker
-// Layer: Worker
-// Responsibility: Daily reminder placeholder — business logic deferred to Phase 7/8
-
 package com.goalwall.worker
 
 import android.content.Context
@@ -15,12 +11,13 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CoroutineDispatcher
 
 @HiltWorker
-class ReminderWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted workerParams: WorkerParameters,
-    @Suppress("UnusedPrivateProperty") private val goalRepository: GoalRepository,
-    @IoDispatcher @Suppress("UnusedPrivateProperty") private val ioDispatcher: CoroutineDispatcher,
-) : CoroutineWorker(appContext, workerParams) {
-
-    override suspend fun doWork(): Result = Result.success()
-}
+class ReminderWorker
+    @AssistedInject
+    constructor(
+        @Assisted appContext: Context,
+        @Assisted workerParams: WorkerParameters,
+        @Suppress("UnusedPrivateProperty") private val goalRepository: GoalRepository,
+        @IoDispatcher @Suppress("UnusedPrivateProperty") private val ioDispatcher: CoroutineDispatcher,
+    ) : CoroutineWorker(appContext, workerParams) {
+        override suspend fun doWork(): Result = Result.success()
+    }

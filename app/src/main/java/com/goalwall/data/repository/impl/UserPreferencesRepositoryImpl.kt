@@ -10,12 +10,13 @@ import javax.inject.Singleton
 
 @Suppress("UnusedPrivateProperty")
 @Singleton
-class UserPreferencesRepositoryImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
-) : UserPreferencesRepository {
+class UserPreferencesRepositoryImpl
+    @Inject
+    constructor(
+        @ApplicationContext private val context: Context,
+        @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    ) : UserPreferencesRepository {
+        override suspend fun setReminderEnabled(enabled: Boolean) = TODO("Not yet implemented")
 
-    override suspend fun setReminderEnabled(enabled: Boolean) = TODO("Not yet implemented")
-
-    override suspend fun setThemeMode(mode: String) = TODO("Not yet implemented")
-}
+        override suspend fun setThemeMode(mode: String) = TODO("Not yet implemented")
+    }
