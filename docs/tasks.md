@@ -126,8 +126,10 @@ UI → ViewModel → Repository → DAO → Room
 
 ### 2.5 Repository 原则
 
-- Repository 是 `@Singleton`，通过 Hilt 注入
-- 读操作：返回 `Flow<T>`（Room 自动感知变更）
+- Repository 是 `@Singleton`，通过 Hilt **构造器注入**（`@Inject constructor`）直接提供
+- **禁止** `interface + Impl + @Binds` 双层结构（单模块单实现下属于过度设计，违反 §10 YAGNI；远端数据源扩展点在 Repository **内部**新增 source，不另起类）
+- **禁止注入或持有 `CoroutineDispatcher`**（含 `@IoDispatcher` 等 Qualifier）。Room 的 `suspend fun` / `Flow` 已自动派发至内部 IO 池，DataStore 同样自带 IO 调度；Repository 内**不得**出现 `withContext(IO)` —— 线程切换由数据源内部保证
+- 读操作:返回 `Flow<T>`（Room 自动感知变更）
 - 写操作：`suspend fun`，在 `viewModelScope` 协程中调用
 - Entity → Model 映射：在 Repository 内部通过扩展函数 `toModel()` 完成
 - Repository 不接受 ViewModel 或 UI 相关参数
@@ -848,22 +850,26 @@ Architecture.md §6（Room 数据结构）
 
 **Steps**
 
-1. 创建 `GoalEntity.kt`（严格按 Architecture.md §6 字段定义）：
-   - 字段：id、title、description、progress、deadline、color、isArchived、createdAt、updatedAt
-   - 注解：`@Entity(tableName = "goals")`，`@PrimaryKey(autoGenerate = true)`
-2. 创建 `MilestoneEntity.kt`：
-   - 字段：id、goalId、title、isDone、createdAt
+1. 创建 `data/model/GoalStatus.kt`（枚举：`ACTIVE, COMPLETED, PAUSED, ARCHIVED`）
+2. 创建 `data/db/converter/GoalStatusConverter.kt`（`@TypeConverter` 字符串 ↔ 枚举），并在 `GoalWallDatabase` 类上添加 `@TypeConverters(GoalStatusConverter::class)`
+3. 创建 `GoalEntity.kt`（严格按 Architecture.md §6 字段定义）：
+   - 字段：id、title、description、**targetValue、currentValue、unit、startDate、targetDate、status**、color、createdAt、updatedAt
+   - 注解：`@Entity(tableName = "goals", indices = [Index("title")])`，`@PrimaryKey(autoGenerate = true)`
+   - **Entity 不持久化 `progress` 字段**（派生属性在 Model 层计算）
+4. 创建 `MilestoneEntity.kt`：
+   - 字段：id、goalId、title、**targetValue、completed**、createdAt
    - 注解：`@Entity`，`@ForeignKey`（CASCADE DELETE）、`@Index("goalId")`
-3. 创建 `ProgressEntity.kt`：
-   - 字段：id、goalId、value、note、recordedAt
+5. 创建 `ProgressEntity.kt`：
+   - 字段：id、goalId、**value: Int**、note、**recordDate**、createdAt
    - 注解：`@Entity`，`@ForeignKey`（CASCADE DELETE）、`@Index("goalId")`
-4. 验证字段类型与 Architecture.md 完全一致
+6. 验证字段类型与 Architecture.md §6 完全一致
 
 **Acceptance Criteria**
 
-- [ ] 三个 Entity 字段与 Architecture.md §6 完全一致
+- [ ] 三个 Entity 字段与 Architecture.md §6 完全一致（含计数 Int 模型与 GoalStatus 枚举）
+- [ ] `GoalStatusConverter` 已注册到 Database
 - [ ] ForeignKey CASCADE DELETE 已配置
-- [ ] Index 已配置（goalId）
+- [ ] Index 已配置（goalId / title）
 - [ ] `./gradlew assembleDebug` 编译通过
 
 **Risks**
@@ -960,13 +966,14 @@ Architecture.md §6（DAO 示例、GoalWithMilestones Relation）
 
 1. 创建 `GoalWithMilestones.kt`（`@Embedded` + `@Relation`）
 2. 创建 `GoalDao.kt`，实现以下方法：
-   - `observeAll(): Flow<List<GoalEntity>>`（按 updatedAt 倒序，排除 archived）
+   - `observeAll(): Flow<List<GoalEntity>>`（`WHERE status != 'ARCHIVED'`，按 updatedAt 倒序）
    - `observeWithMilestones(goalId: Long): Flow<GoalWithMilestones?>`（`@Transaction`）
-   - `getTopByProgress(limit: Int): List<GoalEntity>`（suspend，Widget 用）
+   - `getTopByProgress(limit: Int): List<GoalEntity>`（suspend，按 `currentValue/targetValue` 派生进度排序，**CASE WHEN 做除零保护**，Widget 用）
    - `insert(entity: GoalEntity): Long`（suspend，`OnConflict.REPLACE`）
    - `update(entity: GoalEntity)`（suspend，`@Update`）
    - `deleteById(id: Long)`（suspend，`@Query DELETE`）
-   - `updateProgress(id: Long, progress: Float, now: Long)`（suspend，`@Query UPDATE`）
+   - `updateCurrentValue(id: Long, currentValue: Int, now: Long)`（suspend，`@Query UPDATE`）
+   - `updateStatus(id: Long, status: GoalStatus, now: Long)`（suspend，`@Query UPDATE`）
 3. 更新 `DatabaseModule.kt` 中 `provideGoalDao` 取消占位
 
 **Acceptance Criteria**
@@ -1017,12 +1024,14 @@ Architecture.md §5（Repository 中调用的 DAO 方法）
 **Steps**
 
 1. 创建 `MilestoneDao.kt`：
+   - `observeByGoal(goalId: Long): Flow<List<MilestoneEntity>>`
    - `insert(entity: MilestoneEntity): Long`（suspend）
-   - `setDone(id: Long, done: Boolean)`（suspend，`@Query UPDATE`）
+   - `setCompleted(id: Long, completed: Boolean)`（suspend，`@Query UPDATE`）
    - `deleteByGoalId(goalId: Long)`（suspend，因 CASCADE 通常不需要，但保留作备用）
 2. 创建 `ProgressDao.kt`：
-   - `observeByGoal(goalId: Long): Flow<List<ProgressEntity>>`
+   - `observeByGoal(goalId: Long): Flow<List<ProgressEntity>>`（按 `recordDate` 倒序）
    - `insert(entity: ProgressEntity): Long`（suspend）
+   - `sumValueByGoal(goalId: Long): Int`（suspend，可选，Dashboard 计算累计值用）
 3. 更新 `DatabaseModule.kt` 中对应占位
 
 **Acceptance Criteria**
@@ -1074,11 +1083,12 @@ Architecture.md §5（Repository 中的 `toModel()` 调用）、§6（Entity 字
 **Steps**
 
 1. 创建 `Goal.kt`（data class，字段与 GoalEntity 对应，去除 Room 注解）：
-   - id、title、description、progress、deadline、color、isArchived、createdAt、updatedAt
-   - 添加 `GoalFilter` enum（ACTIVE、ARCHIVED、ALL）
-2. 创建 `Milestone.kt`（id、goalId、title、isDone、createdAt）
+   - 字段：id、title、description、**targetValue、currentValue、unit、startDate、targetDate、status**、color、createdAt、updatedAt
+   - **派生只读属性**：`val progress: Float get() = if (targetValue == 0) 0f else (currentValue.toFloat() / targetValue).coerceIn(0f, 1f)`
+   - 添加 `GoalFilter` enum（ACTIVE、ARCHIVED、ALL；可选 COMPLETED、PAUSED）
+2. 创建 `Milestone.kt`（id、goalId、title、**targetValue、completed**、createdAt）
 3. 创建 `GoalDetail.kt`（包含 `goal: Goal` 和 `milestones: List<Milestone>`）
-4. 创建 `ProgressRecord.kt`（id、goalId、value、note、recordedAt）
+4. 创建 `ProgressRecord.kt`（id、goalId、**value: Int**、note、**recordDate**、createdAt）
 5. 创建 `Mappers.kt`，实现扩展函数：
    - `GoalEntity.toModel(): Goal`
    - `MilestoneEntity.toModel(): Milestone`
@@ -1127,29 +1137,38 @@ Architecture.md §5（GoalRepository 完整设计）
 
 **Files**
 
-- `data/repository/GoalRepository.kt`（新建）
+- `data/repository/GoalRepository.kt`（新建 / 替换原 interface 占位为 `@Singleton class`）
+- `data/repository/impl/GoalRepositoryImpl.kt`（**删除**）
+- `di/RepositoryModule.kt`（**删除** `bindGoalRepository` 行；若 Module 中无其他 `@Binds`，整体删除该 Module 文件）
 
 **Steps**
 
-1. 创建 `GoalRepository.kt`：
-   - `@Singleton` + `@Inject constructor(goalDao: GoalDao, milestoneDao: MilestoneDao)`
+1. 创建 `GoalRepository.kt`（**单类实现，不抽 interface**）：
+   - `@Singleton class GoalRepository @Inject constructor(goalDao: GoalDao, milestoneDao: MilestoneDao)`
+   - **禁止**注入 `CoroutineDispatcher`（Room 已自带 IO 调度，违反将触发 Code Review 拒收）
    - 实现读操作：
      - `val goals: Flow<List<Goal>>`（`goalDao.observeAll().map { ... toModel() }`）
      - `fun observeGoalDetail(goalId: Long): Flow<GoalDetail?>`
    - 实现写操作（均为 suspend fun）：
-     - `addGoal(title, deadline, description): Long`
+     - `addGoal(title, targetValue, unit, startDate, targetDate, description, color): Long`
      - `updateGoal(goal: Goal)`
      - `deleteGoal(goalId: Long)`
-     - `updateProgress(goalId: Long, progress: Float)`
-     - `addMilestone(goalId: Long, title: String): Long`
-     - `toggleMilestone(milestoneId: Long, done: Boolean)`
+     - `updateCurrentValue(goalId: Long, currentValue: Int)`
+     - `setStatus(goalId: Long, status: GoalStatus)`
+     - `addMilestone(goalId: Long, title: String, targetValue: Int): Long`
+     - `toggleMilestone(milestoneId: Long, completed: Boolean)`
 2. 确认所有写操作不在 Repository 内部启动协程（由 ViewModel 的 viewModelScope 管理）
+3. 确认 Repository 内部**无** `withContext(...)` 调用、**无** `Dispatchers.IO` 引用
 
 **Acceptance Criteria**
 
+- [ ] Repository 为单类（无 interface + Impl 拆分）
 - [ ] Repository 不 import 任何 ViewModel 或 UI 类
+- [ ] Repository 不 import `kotlinx.coroutines.Dispatchers` / 不持有 `CoroutineDispatcher` 参数
 - [ ] Flow 属性而非函数（`val goals: Flow<List<Goal>>`）
 - [ ] 无业务逻辑判断（if/when 业务条件）
+- [ ] `data/repository/impl/GoalRepositoryImpl.kt` 已删除
+- [ ] `RepositoryModule` 中 `bindGoalRepository` 已删除
 - [ ] 编译通过
 
 **Risks**
@@ -1186,18 +1205,24 @@ Architecture.md §5（ProgressRepository 设计）
 
 **Files**
 
-- `data/repository/ProgressRepository.kt`（新建）
+- `data/repository/ProgressRepository.kt`（新建 / 替换原 interface 占位为 `@Singleton class`）
+- `data/repository/impl/ProgressRepositoryImpl.kt`（**删除**）
+- `di/RepositoryModule.kt`（**删除** `bindProgressRepository` 行）
 
 **Steps**
 
-1. 创建 `ProgressRepository.kt`：
-   - `@Singleton` + `@Inject constructor(progressDao: ProgressDao)`
+1. 创建 `ProgressRepository.kt`（**单类实现，不抽 interface**）：
+   - `@Singleton class ProgressRepository @Inject constructor(progressDao: ProgressDao)`
+   - **禁止**注入 `CoroutineDispatcher`
    - `fun observeProgressHistory(goalId: Long): Flow<List<ProgressRecord>>`
-   - `suspend fun recordProgress(goalId: Long, value: Float, note: String = "")`
+   - `suspend fun recordProgress(goalId: Long, value: Int, note: String? = null)`
 
 **Acceptance Criteria**
 
-- [ ] 与 GoalRepository 对齐，结构一致
+- [ ] Repository 为单类（无 interface + Impl 拆分）
+- [ ] 不持有 `CoroutineDispatcher`
+- [ ] 与 GoalRepository 结构一致
+- [ ] `data/repository/impl/ProgressRepositoryImpl.kt` 已删除
 - [ ] 编译通过
 
 **Risks**
@@ -1240,8 +1265,9 @@ Architecture.md §4（WidgetDataProvider 设计）
 
 1. 创建 `WidgetDataProvider.kt`：
    - `@Inject constructor(private val goalDao: GoalDao)`（注意：直接依赖 DAO，非 Repository）
+   - **禁止**注入 `CoroutineDispatcher`
    - `suspend fun getTopGoals(limit: Int = 3): List<Goal>`
-   - 内部调用 `goalDao.getTopByProgress(limit).map { it.toModel() }`
+   - 内部调用 `goalDao.getTopByProgress(limit).map { it.toModel() }`（DAO 端已用 `currentValue/targetValue` 派生进度排序并做除零保护）
 
 **Acceptance Criteria**
 
@@ -1581,10 +1607,10 @@ Architecture.md §7（GoalListViewModel 设计）
 1. 创建 `GoalListViewModel.kt`：
    - `@HiltViewModel`，`@Inject constructor(goalRepository: GoalRepository, @ApplicationContext context: Context)`
    - 声明 `_uiState` 和 `_filterState`（`MutableStateFlow<GoalFilter>`）
-   - 通过 `combine(goalRepository.goals, _filterState)` 计算过滤结果
+   - 通过 `combine(goalRepository.goals, _filterState)` 计算过滤结果（按 `goal.status` 映射：ACTIVE 对应 `GoalStatus.ACTIVE`，ARCHIVED 对应 `GoalStatus.ARCHIVED`，ALL 不过滤）
    - 使用 `.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ...)` 转为 StateFlow
    - 将结果更新到 `_uiState`（通过 `onEach + launchIn`）
-   - 实现函数：`deleteGoal(goalId)`、`archiveGoal(goalId)`、`setFilter(filter)`
+   - 实现函数：`deleteGoal(goalId)`、`archiveGoal(goalId)`（内部调用 `goalRepository.setStatus(id, GoalStatus.ARCHIVED)`）、`pauseGoal(goalId)`（可选，`setStatus(id, GoalStatus.PAUSED)`）、`setFilter(filter)`
    - `deleteGoal` 完成后调用 `context.enqueueWidgetSync()`（扩展函数）和 `_events.send(ShowSnackbar(...))`
 2. 在同文件或 `WorkerExtensions.kt` 中定义 `fun Context.enqueueWidgetSync()` 扩展函数
 
@@ -1643,7 +1669,7 @@ Architecture.md §1（components/ 目录）
 2. 创建 `GoalCard.kt`：
    - 接受 `goal: Goal`、`onClick: () -> Unit`、`onDelete: () -> Unit`
    - 使用 `Card` + `Column`
-   - 显示：标题、进度条（GoalProgressBar）、截止日期（格式化）
+   - 显示：标题、**当前值 / 目标值 单位（如 "12 / 20 次"）**、进度条（`GoalProgressBar(goal.progress, goal.color)`，progress 取自 Goal 派生属性）、截止日期（格式化）
    - 长按或滑动触发删除（简单实现：右上角删除按钮）
 
 **Acceptance Criteria**
@@ -1766,7 +1792,8 @@ Architecture.md §7（GoalDetailViewModel）、§8（GoalDetailUiState）
    - `goalId` 从 `SavedStateHandle` 获取
    - 订阅 `goalRepository.observeGoalDetail(goalId)`
    - 订阅 `progressRepository.observeProgressHistory(goalId)`
-   - 实现：`updateProgress(value, note)`、`toggleMilestone(id, done)`、`addMilestone(title)`
+   - 实现：`setCurrentValue(value: Int, note: String? = null)`、`toggleMilestone(id, completed)`、`addMilestone(title: String, targetValue: Int)`
+   - 入参做边界保护：`value.coerceIn(0, targetValue)`，避免越界
 
 **Acceptance Criteria**
 
@@ -1817,26 +1844,30 @@ Architecture.md §1（MilestoneItem 组件）
 
 1. 创建 `MilestoneItem.kt`：接受 `milestone: Milestone`、`onToggle: (Boolean) -> Unit`，显示 Checkbox + 标题
 2. 创建 `GoalDetailScreen.kt`：
-   - 显示目标标题、进度滑块（Slider 0~100%）、里程碑列表
-   - 进度滑块变更触发 `viewModel.updateProgress(...)`
-   - 里程碑 Checkbox 触发 `viewModel.toggleMilestone(...)`
+   - 显示目标标题、单位、**`currentValue / targetValue` 数值（如 "12 / 20 次"）**、派生进度条（`GoalProgressBar(goal.progress, goal.color)`）、里程碑列表
+   - **进度输入用 Stepper / NumberField**（增减整数 currentValue），**不要用 Slider** —— 避免 Float ↔ Int 反算导致的精度抖动
+   - currentValue 变更触发 `viewModel.setCurrentValue(newValue)`
+   - 里程碑 Checkbox 触发 `viewModel.toggleMilestone(id, completed)`
    - 顶部 TopAppBar 含返回和编辑按钮
-   - 底部显示进度历史（简单 Column）
+   - 底部显示进度历史（按 `recordDate` 倒序，显示 "+N / 单位" 增量）
 3. 更新 AppNavHost 替换占位
 
 **Acceptance Criteria**
 
-- [ ] 进度 Slider 范围 0~1（与 progress Float 一致）
+- [ ] currentValue 显示为整数，单位拼接正确
+- [ ] 派生进度条范围 0f~1f（除零时为 0f）
 - [ ] 里程碑完成状态实时更新
 - [ ] 编译通过，可在真机测试
 
 **Risks**
 
-- Slider 浮点精度问题（建议做 `Math.round` 处理后更新）
+- 整数 currentValue 输入需做边界保护：`coerceIn(0, targetValue)`
+- 若 targetValue 在编辑页变小，currentValue 可能 > targetValue —— 由 ViewModel `setCurrentValue` 做收敛
 
 **Notes**
 
-- 进度更新有频繁触发风险，使用 `onValueChangeFinished` 而非 `onValueChange`
+- Stepper 每次点击直接触发 `setCurrentValue`；快速点击合并由 Compose recomposition 处理，无需 onValueChangeFinished 节流
+- 若需"自定义增量"输入框，校验非数字 / 负数后再调用 setCurrentValue
 
 ---
 
@@ -1869,14 +1900,16 @@ Architecture.md §8（GoalEditUiState）
 
 **Steps**
 
-1. 创建 `GoalEditUiState.kt`（按 Architecture.md §8）
+1. 创建 `GoalEditUiState.kt`（按 Architecture.md §8）—— 含 title、description、**targetValue: Int、unit: String、startDate: Long、targetDate: Long?**、color、isSaving、titleError、**targetValueError、unitError**
 2. 创建 `GoalEditViewModel.kt`：
    - `goalId: Long?` 从 `SavedStateHandle`（null = 新建模式）
    - 编辑模式下：在 init 中加载目标数据填充 UiState
-   - 实现字段更新函数：`onTitleChange`、`onDescriptionChange`、`onDeadlineChange`、`onColorChange`
+   - 实现字段更新函数：`onTitleChange`、`onDescriptionChange`、**`onTargetValueChange(Int)`、`onUnitChange(String)`、`onStartDateChange(Long)`、`onTargetDateChange(Long?)`**、`onColorChange`
    - 实现 `saveGoal()`：
      - 校验 title 非空（更新 `titleError`）
-     - 新建调用 `goalRepository.addGoal(...)`
+     - 校验 **targetValue > 0**（更新 `targetValueError`）
+     - 校验 **unit 非空**（更新 `unitError`）
+     - 新建调用 `goalRepository.addGoal(title, targetValue, unit, startDate, targetDate, description, color)`
      - 编辑调用 `goalRepository.updateGoal(...)`
      - 成功后发送 `NavigateBack` 事件
 
@@ -1931,7 +1964,10 @@ GoalEditUiState
    - 表单字段：
      - `OutlinedTextField` — 目标标题（`titleError` 显示错误提示）
      - `OutlinedTextField` — 描述（多行）
-     - 截止日期选择器（DatePickerDialog）
+     - **`OutlinedTextField` — 目标值 targetValue（`KeyboardType.Number`，`targetValueError` 显示错误提示）**
+     - **`OutlinedTextField` — 单位 unit（如 "次"、"km"、"分钟"，`unitError` 显示错误提示）**
+     - **开始日期选择器**（DatePickerDialog，默认今日）
+     - 截止日期选择器（DatePickerDialog，可选 / 可清空）
      - 颜色选择器（水平 Row，5 个预设颜色圆点）
    - 底部保存按钮（`Button`），`isSaving` 状态时显示 Loading
    - 消费 NavigateBack 事件返回上一页
@@ -2003,9 +2039,9 @@ Architecture.md §1（DashboardViewModel）
    - 订阅 `goalRepository.goals`
    - 计算汇总数据（在 ViewModel 中进行，非 Repository）：
      - `totalGoals`：总数
-     - `completedGoals`：progress >= 1.0f 的数量
-     - `averageProgress`：平均进度
-     - `topGoals`：取前 3 个进度最高的目标
+     - `completedGoals`：`status == GoalStatus.COMPLETED` 的数量（不再用浮点比较）
+     - `averageProgress`：`goals.map { it.progress }.average()`（Goal Model 的派生属性，已含除零保护）
+     - `topGoals`：取前 3 个 `progress` 最高的目标（基于派生进度排序）
 
 **Acceptance Criteria**
 
@@ -2564,7 +2600,7 @@ GoalRepository 的所有公共方法
    - 测试用例：
      - `addGoal_insertsGoalToDatabase()`
      - `deleteGoal_removesGoalAndCascades()`
-     - `updateProgress_updatesProgressField()`
+     - `updateCurrentValue_updatesCurrentValueField()`
      - `goals_emitsUpdatedListOnChange()`（使用 Turbine `test{}`）
      - `observeGoalDetail_returnsGoalWithMilestones()`
 2. 使用 `runTest` 包装所有协程测试
@@ -2670,7 +2706,7 @@ GoalDetailViewModel 的公共函数
 
 1. 测试用例：
    - `init_loadsGoalDetailAndProgressHistory()`
-   - `updateProgress_callsRepositoryWithCorrectValues()`
+   - `setCurrentValue_callsRepositoryWithCorrectValues()`
    - `toggleMilestone_callsRepositoryToggle()`
    - `toggleMilestone_done_triggersNotification()`
 

@@ -278,6 +278,8 @@ fun Context.enqueueWidgetSync() {
 - 暴露 `Flow` 用于 UI 订阅，暴露 `suspend fun` 用于写操作
 - 负责 Entity ↔ Model 的映射转换
 - **不依赖** Context、ViewModel、任何 Android Framework（除 Room）
+- **统一使用 `@Singleton class XxxRepository @Inject constructor(...)` 单类构造器注入**；**禁止** `interface + Impl + @Binds` 双层结构（单模块单实现下属于过度设计，违反 §10 "扩展性禁忌"；如未来出现远端数据源，扩展点在 Repository **内部**新增数据源，不另起类）
+- **禁止在 Repository 层注入或持有 `CoroutineDispatcher`**（含 `@IoDispatcher` 等 Qualifier）。Room 的 `suspend fun` / `Flow` 已自动派发至内部 IO 池，DataStore 同样自带 IO 调度；Repository 内**不得**出现 `withContext(IO)` —— 线程切换由数据源内部保证
 
 ### GoalRepository.kt
 
@@ -295,8 +297,29 @@ class GoalRepository @Inject constructor(
         goalDao.observeWithMilestones(goalId).map { it?.toDetail() }
 
     // ── 写：suspend fun ───────────────────────────────────────
-    suspend fun addGoal(title: String, deadline: Long?, description: String): Long =
-        goalDao.insert(GoalEntity(title = title, deadline = deadline, description = description))
+    suspend fun addGoal(
+        title: String,
+        targetValue: Int,
+        unit: String,
+        startDate: Long,
+        targetDate: Long? = null,
+        description: String? = null,
+        color: String = "#4F8EF7"
+    ): Long = goalDao.insert(
+        GoalEntity(
+            title = title,
+            description = description,
+            targetValue = targetValue,
+            currentValue = 0,
+            unit = unit,
+            startDate = startDate,
+            targetDate = targetDate,
+            status = GoalStatus.ACTIVE,
+            color = color,
+            createdAt = System.currentTimeMillis(),
+            updatedAt = System.currentTimeMillis()
+        )
+    )
 
     suspend fun updateGoal(goal: Goal) =
         goalDao.update(goal.toEntity())
@@ -304,15 +327,20 @@ class GoalRepository @Inject constructor(
     suspend fun deleteGoal(goalId: Long) =
         goalDao.deleteById(goalId)
 
-    suspend fun updateProgress(goalId: Long, progress: Float) {
-        goalDao.updateProgress(goalId, progress)
+    // 进度推进：直接写入整数 currentValue，UI 端的派生 progress 自动随 Flow 更新
+    suspend fun updateCurrentValue(goalId: Long, currentValue: Int) {
+        goalDao.updateCurrentValue(goalId, currentValue)
     }
 
-    suspend fun addMilestone(goalId: Long, title: String) =
-        milestoneDao.insert(MilestoneEntity(goalId = goalId, title = title))
+    suspend fun setStatus(goalId: Long, status: GoalStatus) {
+        goalDao.updateStatus(goalId, status)
+    }
 
-    suspend fun toggleMilestone(milestoneId: Long, done: Boolean) =
-        milestoneDao.setDone(milestoneId, done)
+    suspend fun addMilestone(goalId: Long, title: String, targetValue: Int): Long =
+        milestoneDao.insert(MilestoneEntity(goalId = goalId, title = title, targetValue = targetValue))
+
+    suspend fun toggleMilestone(milestoneId: Long, completed: Boolean) =
+        milestoneDao.setCompleted(milestoneId, completed)
 }
 ```
 
@@ -326,8 +354,16 @@ class ProgressRepository @Inject constructor(
     fun observeProgressHistory(goalId: Long): Flow<List<ProgressRecord>> =
         progressDao.observeByGoal(goalId).map { it.map { e -> e.toModel() } }
 
-    suspend fun recordProgress(goalId: Long, value: Float, note: String = "") {
-        progressDao.insert(ProgressEntity(goalId = goalId, value = value, note = note))
+    suspend fun recordProgress(goalId: Long, value: Int, note: String? = null) {
+        progressDao.insert(
+            ProgressEntity(
+                goalId = goalId,
+                value = value,
+                note = note,
+                recordDate = System.currentTimeMillis(),
+                createdAt = System.currentTimeMillis()
+            )
+        )
     }
 }
 ```
@@ -339,19 +375,48 @@ class ProgressRepository @Inject constructor(
 ### GoalEntity.kt
 
 ```kotlin
-@Entity(tableName = "goals")
+@Entity(
+    tableName = "goals",
+    indices = [Index(value = ["title"])]
+)
 data class GoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
-    val description: String = "",
-    val progress: Float = 0f,           // 0.0 ~ 1.0
-    val deadline: Long? = null,         // Unix timestamp ms
-    val color: String = "#4F8EF7",      // 目标卡片颜色
-    val isArchived: Boolean = false,
+    val description: String? = null,
+    val targetValue: Int,                       // 目标值（如 100 次、5 km）
+    val currentValue: Int = 0,                  // 当前累计值
+    val unit: String,                           // 单位（如 "次"、"km"、"小时"）
+    val startDate: Long,                        // 开始日期 Unix ms
+    val targetDate: Long? = null,               // 截止日期 Unix ms（可空）
+    val status: GoalStatus = GoalStatus.ACTIVE, // 详见下方枚举
+    val color: String = "#4F8EF7",              // 目标卡片颜色
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )
 ```
+
+> **进度衍生策略**：UI 展示进度 = `currentValue / targetValue.toFloat()`，需在 Mapper / Goal Model 派生属性中做除零保护（`targetValue == 0` 时返回 `0f`，并 `coerceIn(0f, 1f)`）。**Entity 不持久化 `progress` 字段**，避免双写不一致；任何排序 / 过滤的"进度"逻辑均基于该派生值。
+
+### GoalStatus.kt（枚举 + TypeConverter）
+
+```kotlin
+enum class GoalStatus {
+    ACTIVE,      // 进行中（默认列表展示，计入活跃统计）
+    COMPLETED,   // 已完成（保留在列表，可标识勋章）
+    PAUSED,      // 暂停（不计入活跃统计，但不归档）
+    ARCHIVED     // 已归档（默认列表过滤掉）
+}
+
+class GoalStatusConverter {
+    @TypeConverter
+    fun fromGoalStatus(status: GoalStatus): String = status.name
+
+    @TypeConverter
+    fun toGoalStatus(value: String): GoalStatus = GoalStatus.valueOf(value)
+}
+```
+
+> `GoalWallDatabase` 类上需添加 `@TypeConverters(GoalStatusConverter::class)`。状态枚举为 OCP 友好的可扩展点 —— 未来增加 `OVERDUE` / `IN_REVIEW` 仅需扩展枚举值，不触发 schema 迁移（前提是已存在 `String` 列）。
 
 ### MilestoneEntity.kt
 
@@ -370,7 +435,8 @@ data class MilestoneEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val goalId: Long,
     val title: String,
-    val isDone: Boolean = false,
+    val targetValue: Int,                       // 达到该值视为里程碑完成（与 Goal.currentValue 对齐）
+    val completed: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )
 ```
@@ -391,9 +457,10 @@ data class MilestoneEntity(
 data class ProgressEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val goalId: Long,
-    val value: Float,                  // 当次记录的进度值
-    val note: String = "",
-    val recordedAt: Long = System.currentTimeMillis()
+    val value: Int,                              // 当次记录的整数增量（如本次跑 3km、做 20 个）
+    val note: String? = null,
+    val recordDate: Long = System.currentTimeMillis(),  // 业务记录日期（用户可选）
+    val createdAt: Long = System.currentTimeMillis()    // 写入时间戳（系统）
 )
 ```
 
@@ -402,14 +469,23 @@ data class ProgressEntity(
 ```kotlin
 @Dao
 interface GoalDao {
-    @Query("SELECT * FROM goals WHERE isArchived = 0 ORDER BY updatedAt DESC")
+    // 默认列表：排除已归档（PAUSED / COMPLETED 仍可见）
+    @Query("SELECT * FROM goals WHERE status != 'ARCHIVED' ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<GoalEntity>>
 
     @Transaction
     @Query("SELECT * FROM goals WHERE id = :goalId")
     fun observeWithMilestones(goalId: Long): Flow<GoalWithMilestones?>
 
-    @Query("SELECT * FROM goals WHERE isArchived = 0 ORDER BY progress DESC LIMIT :limit")
+    // 派生进度排序：currentValue/targetValue，CASE WHEN 做除零保护
+    @Query(
+        """
+        SELECT * FROM goals
+        WHERE status = 'ACTIVE'
+        ORDER BY (CAST(currentValue AS REAL) / CASE WHEN targetValue = 0 THEN 1 ELSE targetValue END) DESC
+        LIMIT :limit
+        """
+    )
     suspend fun getTopByProgress(limit: Int): List<GoalEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -421,8 +497,11 @@ interface GoalDao {
     @Query("DELETE FROM goals WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    @Query("UPDATE goals SET progress = :progress, updatedAt = :now WHERE id = :id")
-    suspend fun updateProgress(id: Long, progress: Float, now: Long = System.currentTimeMillis())
+    @Query("UPDATE goals SET currentValue = :currentValue, updatedAt = :now WHERE id = :id")
+    suspend fun updateCurrentValue(id: Long, currentValue: Int, now: Long = System.currentTimeMillis())
+
+    @Query("UPDATE goals SET status = :status, updatedAt = :now WHERE id = :id")
+    suspend fun updateStatus(id: Long, status: GoalStatus, now: Long = System.currentTimeMillis())
 }
 ```
 
@@ -504,9 +583,8 @@ class GoalListViewModel @Inject constructor(
 
     fun archiveGoal(goalId: Long) {
         viewModelScope.launch {
-            goalRepository.updateGoal(
-                goalRepository.goals.first().first { it.id == goalId }.copy(isArchived = true)
-            )
+            // 直接走专用 status setter，避免读—改—写竞态
+            goalRepository.setStatus(goalId, GoalStatus.ARCHIVED)
         }
     }
 }
@@ -541,16 +619,16 @@ class GoalDetailViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    fun updateProgress(value: Float, note: String = "") {
+    fun setCurrentValue(currentValue: Int, note: String? = null) {
         viewModelScope.launch {
-            goalRepository.updateProgress(goalId, value)
-            progressRepository.recordProgress(goalId, value, note)
+            goalRepository.updateCurrentValue(goalId, currentValue)
+            progressRepository.recordProgress(goalId, currentValue, note)
         }
     }
 
-    fun toggleMilestone(milestoneId: Long, done: Boolean) {
+    fun toggleMilestone(milestoneId: Long, completed: Boolean) {
         viewModelScope.launch {
-            goalRepository.toggleMilestone(milestoneId, done)
+            goalRepository.toggleMilestone(milestoneId, completed)
         }
     }
 }
@@ -585,10 +663,15 @@ data class GoalDetailUiState(
 data class GoalEditUiState(
     val title: String = "",
     val description: String = "",
-    val deadline: Long? = null,
+    val targetValue: Int = 0,                          // 目标值（必填，> 0）
+    val unit: String = "",                             // 单位（必填）
+    val startDate: Long = System.currentTimeMillis(),  // 开始日期，默认今日
+    val targetDate: Long? = null,                      // 截止日期，可空
     val color: String = "#4F8EF7",
     val isSaving: Boolean = false,
-    val titleError: String? = null     // 表单校验错误
+    val titleError: String? = null,                    // title 校验错误
+    val targetValueError: String? = null,              // targetValue 校验错误（如 ≤ 0）
+    val unitError: String? = null                      // unit 校验错误（如为空）
 )
 ```
 
@@ -631,8 +714,8 @@ val filteredGoals: StateFlow<List<Goal>> = combine(
     _filterState
 ) { goals, filter ->
     when (filter) {
-        GoalFilter.ACTIVE -> goals.filter { !it.isArchived }
-        GoalFilter.ARCHIVED -> goals.filter { it.isArchived }
+        GoalFilter.ACTIVE -> goals.filter { it.status == GoalStatus.ACTIVE }
+        GoalFilter.ARCHIVED -> goals.filter { it.status == GoalStatus.ARCHIVED }
         GoalFilter.ALL -> goals
     }
 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -704,7 +787,7 @@ class ReminderWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val activeGoals = goalRepository.goals.first().filter { !it.isArchived }
+        val activeGoals = goalRepository.goals.first().filter { it.status == GoalStatus.ACTIVE }
         if (activeGoals.isNotEmpty()) {
             notificationHelper.showDailyReminder(activeGoals.size)
         }
