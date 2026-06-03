@@ -1,27 +1,96 @@
+// Package: com.goalwall.data.repository
+// Layer: Data — Repository
+// Responsibility: Aggregates goal data, exposes Flow to ViewModel, maps Entity to Model.
+// Dependencies: GoalDao, MilestoneDao, data.model.*
+// Forbidden imports: ui.**, worker.**, kotlinx.coroutines.Dispatchers
 package com.goalwall.data.repository
 
-/**
- * Placeholder — full API in Task 3.6 (Architecture.md §5).
- */
-interface GoalRepository {
-    suspend fun addGoal()
+import com.goalwall.data.db.dao.GoalDao
+import com.goalwall.data.db.dao.MilestoneDao
+import com.goalwall.data.db.entity.GoalEntity
+import com.goalwall.data.db.entity.MilestoneEntity
+import com.goalwall.data.model.Goal
+import com.goalwall.data.model.GoalDetail
+import com.goalwall.data.model.GoalStatus
+import com.goalwall.data.model.toDetail
+import com.goalwall.data.model.toEntity
+import com.goalwall.data.model.toModel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
-    suspend fun updateGoal()
+@Singleton
+class GoalRepository
+    @Inject
+    constructor(
+        private val goalDao: GoalDao,
+        private val milestoneDao: MilestoneDao,
+    ) {
+        val goals: Flow<List<Goal>> =
+            goalDao.observeAll().map { list -> list.map { it.toModel() } }
 
-    suspend fun deleteGoal(goalId: Long)
+        fun observeGoalDetail(goalId: Long): Flow<GoalDetail?> =
+            goalDao.observeWithMilestones(goalId).map { it?.toDetail() }
 
-    suspend fun updateProgress(
-        goalId: Long,
-        progress: Float,
-    )
+        suspend fun addGoal(
+            title: String,
+            targetValue: Int,
+            unit: String,
+            startDate: Long,
+            targetDate: Long? = null,
+            description: String? = null,
+            color: String = "#4F8EF7",
+        ): Long =
+            goalDao.insert(
+                GoalEntity(
+                    title = title,
+                    description = description,
+                    targetValue = targetValue,
+                    currentValue = 0,
+                    unit = unit,
+                    startDate = startDate,
+                    targetDate = targetDate,
+                    status = GoalStatus.ACTIVE,
+                    color = color,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
 
-    suspend fun addMilestone(
-        goalId: Long,
-        title: String,
-    )
+        suspend fun updateGoal(goal: Goal) = goalDao.update(goal.toEntity())
 
-    suspend fun toggleMilestone(
-        milestoneId: Long,
-        done: Boolean,
-    )
-}
+        suspend fun deleteGoal(goalId: Long) = goalDao.deleteById(goalId)
+
+        suspend fun updateCurrentValue(
+            goalId: Long,
+            currentValue: Int,
+        ) {
+            goalDao.updateCurrentValue(goalId, currentValue)
+        }
+
+        suspend fun setStatus(
+            goalId: Long,
+            status: GoalStatus,
+        ) {
+            goalDao.updateStatus(goalId, status)
+        }
+
+        suspend fun addMilestone(
+            goalId: Long,
+            title: String,
+            targetValue: Int,
+        ): Long =
+            milestoneDao.insert(
+                MilestoneEntity(
+                    goalId = goalId,
+                    title = title,
+                    targetValue = targetValue,
+                ),
+            )
+
+        suspend fun toggleMilestone(
+            milestoneId: Long,
+            completed: Boolean,
+        ) = milestoneDao.setCompleted(milestoneId, completed)
+    }

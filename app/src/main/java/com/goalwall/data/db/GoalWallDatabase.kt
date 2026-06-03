@@ -1,3 +1,8 @@
+// Package: com.goalwall.data.db
+// Layer: Data — Room Database
+// Responsibility: Registers Room entities, DAOs, and type converters.
+// Dependencies: Room, GoalStatusConverter, entity/dao packages
+// Forbidden imports: ui.**, worker.**
 package com.goalwall.data.db
 
 import androidx.room.Database

@@ -1,3 +1,8 @@
+// Package: com.goalwall.di
+// Layer: DI — Hilt Module
+// Responsibility: Provides GoalWallDatabase and DAO singletons.
+// Dependencies: Room, GoalWallDatabase, DAO interfaces
+// Forbidden imports: ui.**
 package com.goalwall.di
 
 import android.content.Context

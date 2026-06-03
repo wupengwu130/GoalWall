@@ -1,3 +1,8 @@
+// Package: com.goalwall.data.db.entity
+// Layer: Data — Room Entity
+// Responsibility: Persists milestone records linked to goals.
+// Dependencies: Room, GoalEntity
+// Forbidden imports: ui.**, worker.**
 package com.goalwall.data.db.entity
 
 import androidx.room.Entity
@@ -22,6 +27,6 @@ data class MilestoneEntity(
     val goalId: Long,
     val title: String,
     val targetValue: Int,
-    val completed: Boolean,
-    val createdAt: Long,
+    val completed: Boolean = false,
+    val createdAt: Long = System.currentTimeMillis(),
 )

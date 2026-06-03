@@ -1,3 +1,8 @@
+// Package: com.goalwall.data.db.entity
+// Layer: Data — Room Entity
+// Responsibility: Persists progress history records linked to goals.
+// Dependencies: Room, GoalEntity
+// Forbidden imports: ui.**, worker.**
 package com.goalwall.data.db.entity
 
 import androidx.room.Entity
@@ -22,6 +27,6 @@ data class ProgressEntity(
     val goalId: Long,
     val value: Int,
     val note: String? = null,
-    val recordDate: Long,
-    val createdAt: Long,
+    val recordDate: Long = System.currentTimeMillis(),
+    val createdAt: Long = System.currentTimeMillis(),
 )
