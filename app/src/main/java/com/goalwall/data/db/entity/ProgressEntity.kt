@@ -1,13 +1,27 @@
 package com.goalwall.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/**
- * Placeholder — business fields added in Task 3.1 (Architecture.md §6).
- */
-@Entity(tableName = "progress_records")
+@Entity(
+    tableName = "progress_records",
+    foreignKeys = [
+        ForeignKey(
+            entity = GoalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["goalId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("goalId")],
+)
 data class ProgressEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val createdAt: Long = System.currentTimeMillis(),
+    val goalId: Long,
+    val value: Int,
+    val note: String? = null,
+    val recordDate: Long,
+    val createdAt: Long,
 )

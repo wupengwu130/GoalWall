@@ -1,13 +1,27 @@
 package com.goalwall.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/**
- * Placeholder — business fields added in Task 3.1 (Architecture.md §6).
- */
-@Entity(tableName = "milestones")
+@Entity(
+    tableName = "milestones",
+    foreignKeys = [
+        ForeignKey(
+            entity = GoalEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["goalId"],
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
+    indices = [Index("goalId")],
+)
 data class MilestoneEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val createdAt: Long = System.currentTimeMillis(),
+    val goalId: Long,
+    val title: String,
+    val targetValue: Int,
+    val completed: Boolean,
+    val createdAt: Long,
 )

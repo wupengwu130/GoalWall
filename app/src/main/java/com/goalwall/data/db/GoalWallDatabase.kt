@@ -2,6 +2,8 @@ package com.goalwall.data.db
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+import com.goalwall.data.db.converter.GoalStatusConverter
 import com.goalwall.data.db.dao.GoalDao
 import com.goalwall.data.db.dao.MilestoneDao
 import com.goalwall.data.db.dao.ProgressDao
@@ -9,6 +11,7 @@ import com.goalwall.data.db.entity.GoalEntity
 import com.goalwall.data.db.entity.MilestoneEntity
 import com.goalwall.data.db.entity.ProgressEntity
 
+@TypeConverters(GoalStatusConverter::class)
 @Database(
     entities = [
         GoalEntity::class,

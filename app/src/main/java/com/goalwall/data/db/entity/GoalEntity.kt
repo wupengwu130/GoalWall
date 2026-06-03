@@ -1,13 +1,24 @@
 package com.goalwall.data.db.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.goalwall.data.model.GoalStatus
 
-/**
- * Placeholder — business fields added in Task 3.1 (Architecture.md §6).
- */
-@Entity(tableName = "goals")
+@Entity(
+    tableName = "goals",
+    indices = [Index(value = ["title"])],
+)
 data class GoalEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val createdAt: Long = System.currentTimeMillis(),
+    val title: String,
+    val description: String? = null,
+    val targetValue: Int,
+    val currentValue: Int,
+    val unit: String,
+    val startDate: Long,
+    val targetDate: Long? = null,
+    val status: GoalStatus,
+    val createdAt: Long,
+    val updatedAt: Long,
 )
