@@ -1,3 +1,8 @@
+// Package: com.goalwall.ui.theme
+// Layer: UI — Theme
+// Responsibility: Defines GoalWall brand color tokens for light and dark schemes.
+// Dependencies: Compose Color
+// Forbidden imports: data.**, androidx.room.**
 package com.goalwall.ui.theme
 
 import androidx.compose.ui.graphics.Color

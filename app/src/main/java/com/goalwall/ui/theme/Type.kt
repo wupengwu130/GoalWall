@@ -1,3 +1,8 @@
+// Package: com.goalwall.ui.theme
+// Layer: UI — Theme
+// Responsibility: Defines Material3 Typography using system fonts.
+// Dependencies: Compose Material3 Typography
+// Forbidden imports: data.**, androidx.room.**
 package com.goalwall.ui.theme
 
 import androidx.compose.material3.Typography

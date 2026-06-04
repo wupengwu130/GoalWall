@@ -1,3 +1,8 @@
+// Package: com.goalwall.ui.theme
+// Layer: UI — Theme
+// Responsibility: Applies GoalWall Material3 theme with light/dark color schemes.
+// Dependencies: Color.kt, Type.kt, Material3
+// Forbidden imports: data.**, androidx.room.**
 package com.goalwall.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
