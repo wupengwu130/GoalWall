@@ -30,6 +30,10 @@ class GoalRepository
         val goals: Flow<List<Goal>> =
             goalDao.observeAll().map { list -> list.map { it.toModel() } }
 
+        val allGoals: Flow<List<Goal>> =
+            goalDao.observeAllIncludingArchived()
+                .map { list -> list.map { it.toModel() } }
+
         fun observeGoalDetail(goalId: Long): Flow<GoalDetail?> =
             goalDao.observeWithMilestones(goalId).map { it?.toDetail() }
 

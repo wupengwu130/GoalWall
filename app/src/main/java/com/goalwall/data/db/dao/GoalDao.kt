@@ -20,6 +20,9 @@ interface GoalDao {
     @Query("SELECT * FROM goals WHERE status != 'ARCHIVED' ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<GoalEntity>>
 
+    @Query("SELECT * FROM goals ORDER BY updatedAt DESC")
+    fun observeAllIncludingArchived(): Flow<List<GoalEntity>>
+
     @Transaction
     @Query("SELECT * FROM goals WHERE id = :goalId")
     fun observeWithMilestones(goalId: Long): Flow<GoalWithMilestones?>

@@ -290,8 +290,13 @@ class GoalRepository @Inject constructor(
     private val milestoneDao: MilestoneDao
 ) {
     // ── 读：Flow（Room 自动感知变更）──────────────────────────
+    // goals = 默认首页列表（非归档目标，status != ARCHIVED）
     val goals: Flow<List<Goal>> =
         goalDao.observeAll().map { list -> list.map { it.toModel() } }
+
+    // allGoals = 全量目标（含归档），供 GoalFilter 的 ALL / ARCHIVED 等过滤使用
+    val allGoals: Flow<List<Goal>> =
+        goalDao.observeAllIncludingArchived().map { list -> list.map { it.toModel() } }
 
     fun observeGoalDetail(goalId: Long): Flow<GoalDetail?> =
         goalDao.observeWithMilestones(goalId).map { it?.toDetail() }
@@ -354,6 +359,8 @@ class ProgressRepository @Inject constructor(
     fun observeProgressHistory(goalId: Long): Flow<List<ProgressRecord>> =
         progressDao.observeByGoal(goalId).map { it.map { e -> e.toModel() } }
 
+    // value = 本次进度的【增量】（delta），非累计值。
+    // 例如累计从 5 推进到 8，应传入 value = 3（而非 8）。
     suspend fun recordProgress(goalId: Long, value: Int, note: String? = null) {
         progressDao.insert(
             ProgressEntity(
@@ -464,14 +471,23 @@ data class ProgressEntity(
 )
 ```
 
+> **增量语义（关键约定）**：`ProgressEntity.value` 与 `ProgressRecord.value` 均为**当次增量（delta）**，不是累计值。`Goal.currentValue` 才是累计值。二者关系：`currentValue` 累加历次 `delta`。
+> - **写入**：`GoalDetailViewModel.setCurrentValue(newValue)` 先求 `delta = newValue - oldValue`，再以 `delta` 调用 `recordProgress()`；`delta == 0` 时不写历史。
+> - **ProgressHistory 展示**：按 `recordDate` 倒序展示**增量记录**（如 "+3 / km"），非累计快照。
+> - **Dashboard 统计**：基于**增量记录**聚合（如 `progressDao.sumValueByGoal()` 求和应等于 `currentValue` 的累计增长），不可把单条 `value` 当作累计值。
+
 ### DAO 示例
 
 ```kotlin
 @Dao
 interface GoalDao {
-    // 默认列表：排除已归档（PAUSED / COMPLETED 仍可见）
+    // 默认首页列表：排除已归档（PAUSED / COMPLETED 仍可见）
     @Query("SELECT * FROM goals WHERE status != 'ARCHIVED' ORDER BY updatedAt DESC")
     fun observeAll(): Flow<List<GoalEntity>>
+
+    // 全量列表：包含已归档，供 GoalFilter 的 ALL / ARCHIVED 过滤
+    @Query("SELECT * FROM goals ORDER BY updatedAt DESC")
+    fun observeAllIncludingArchived(): Flow<List<GoalEntity>>
 
     @Transaction
     @Query("SELECT * FROM goals WHERE id = :goalId")
@@ -561,16 +577,32 @@ class GoalListViewModel @Inject constructor(
     private val _events = Channel<GoalListEvent>(Channel.BUFFERED)
     val events: Flow<GoalListEvent> = _events.receiveAsFlow()
 
+    // ── 过滤状态 ───────────────────────────────────────────────
+    private val _filterState = MutableStateFlow(GoalFilter.ACTIVE)
+
     init {
         observeGoals()
     }
 
+    // 基于 allGoals（含归档）做过滤，保证 ARCHIVED / ALL 可正确展示
     private fun observeGoals() {
-        goalRepository.goals
+        combine(goalRepository.allGoals, _filterState) { goals, filter ->
+            when (filter) {
+                GoalFilter.ACTIVE    -> goals.filter { it.status == GoalStatus.ACTIVE }
+                GoalFilter.ARCHIVED  -> goals.filter { it.status == GoalStatus.ARCHIVED }
+                GoalFilter.COMPLETED -> goals.filter { it.status == GoalStatus.COMPLETED }
+                GoalFilter.PAUSED    -> goals.filter { it.status == GoalStatus.PAUSED }
+                GoalFilter.ALL       -> goals
+            }
+        }
             .onEach { goals ->
                 _uiState.update { it.copy(goals = goals, isLoading = false) }
             }
             .launchIn(viewModelScope)
+    }
+
+    fun setFilter(filter: GoalFilter) {
+        _filterState.value = filter
     }
 
     fun deleteGoal(goalId: Long) {
@@ -619,10 +651,16 @@ class GoalDetailViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
-    fun setCurrentValue(currentValue: Int, note: String? = null) {
+    // setCurrentValue 接收"新的累计值"，但进度历史记录的是"增量"
+    // 因此需先算 delta = 新值 - 旧值，再分别写入 currentValue 与增量记录
+    fun setCurrentValue(newValue: Int, note: String? = null) {
         viewModelScope.launch {
-            goalRepository.updateCurrentValue(goalId, currentValue)
-            progressRepository.recordProgress(goalId, currentValue, note)
+            val oldValue = uiState.value.detail?.goal?.currentValue ?: 0
+            val delta = newValue - oldValue
+            goalRepository.updateCurrentValue(goalId, newValue)
+            if (delta != 0) {
+                progressRepository.recordProgress(goalId, delta, note)
+            }
         }
     }
 
@@ -709,17 +747,22 @@ val uiState by viewModel.uiState.collectAsState()
 
 ```kotlin
 // 不在 Repository 增加参数，而在 ViewModel combine filter state
+// 过滤源必须是 allGoals（含归档），否则 ARCHIVED / ALL 永远无法展示
 val filteredGoals: StateFlow<List<Goal>> = combine(
-    goalRepository.goals,
+    goalRepository.allGoals,
     _filterState
 ) { goals, filter ->
     when (filter) {
-        GoalFilter.ACTIVE -> goals.filter { it.status == GoalStatus.ACTIVE }
-        GoalFilter.ARCHIVED -> goals.filter { it.status == GoalStatus.ARCHIVED }
-        GoalFilter.ALL -> goals
+        GoalFilter.ACTIVE    -> goals.filter { it.status == GoalStatus.ACTIVE }
+        GoalFilter.ARCHIVED  -> goals.filter { it.status == GoalStatus.ARCHIVED }
+        GoalFilter.COMPLETED -> goals.filter { it.status == GoalStatus.COMPLETED }
+        GoalFilter.PAUSED    -> goals.filter { it.status == GoalStatus.PAUSED }
+        GoalFilter.ALL       -> goals
     }
 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 ```
+
+> **过滤源约定**：默认首页（`goals`）展示非归档目标；任何涉及 `ARCHIVED` / `ALL` 的过滤必须基于 `allGoals`。`goals` 仅作为"首页默认非归档列表"使用，不可作为 `GoalFilter` 的全量数据源。
 
 ---
 
