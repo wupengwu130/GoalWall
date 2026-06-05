@@ -20,6 +20,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.goalwall.R
+import com.goalwall.ui.goal.GoalDetailScreen
+import com.goalwall.ui.goal.GoalEditScreen
+import com.goalwall.ui.goal.GoalListScreen
 
 @Suppress("FunctionName")
 @Composable
@@ -33,7 +36,14 @@ fun AppNavHost(
         modifier = modifier,
     ) {
         composable(Screen.GoalList.route) {
-            PlaceholderScreen(stringResource(R.string.nav_placeholder_goal_list))
+            GoalListScreen(
+                onNavigateToDetail = { goalId ->
+                    navController.navigate(Screen.GoalDetail.createRoute(goalId))
+                },
+                onNavigateToCreate = {
+                    navController.navigate(Screen.GoalEdit.createRoute())
+                },
+            )
         }
         composable(Screen.Dashboard.route) {
             PlaceholderScreen(stringResource(R.string.nav_placeholder_dashboard))
@@ -49,13 +59,14 @@ fun AppNavHost(
                         type = NavType.LongType
                     },
                 ),
-        ) { backStackEntry ->
-            val goalId = backStackEntry.arguments?.getLong("goalId")
-            PlaceholderScreen(
-                stringResource(
-                    R.string.nav_placeholder_goal_detail,
-                    goalId ?: 0L,
-                ),
+        ) {
+            GoalDetailScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                },
+                onNavigateToEdit = { goalId ->
+                    navController.navigate(Screen.GoalEdit.createRoute(goalId))
+                },
             )
         }
         composable(
@@ -68,15 +79,10 @@ fun AppNavHost(
                         defaultValue = null
                     },
                 ),
-        ) { backStackEntry ->
-            val goalId = backStackEntry.arguments?.getLong("goalId")
-            val label =
-                if (goalId != null) {
-                    stringResource(R.string.nav_placeholder_goal_edit_with_id, goalId)
-                } else {
-                    stringResource(R.string.nav_placeholder_goal_edit)
-                }
-            PlaceholderScreen(label)
+        ) { _ ->
+            GoalEditScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
         }
     }
 }
