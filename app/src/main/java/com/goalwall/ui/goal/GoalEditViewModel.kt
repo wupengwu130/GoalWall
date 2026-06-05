@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -48,21 +49,20 @@ class GoalEditViewModel
         init {
             if (goalId != null) {
                 viewModelScope.launch {
-                    goalRepository.observeGoalDetail(goalId).collect { detail ->
-                        if (!hasLoadedInitialData && detail != null) {
-                            hasLoadedInitialData = true
-                            originalGoal = detail.goal
-                            _uiState.update { state ->
-                                state.copy(
-                                    title = detail.goal.title,
-                                    description = detail.goal.description.orEmpty(),
-                                    targetValue = detail.goal.targetValue,
-                                    unit = detail.goal.unit,
-                                    startDate = detail.goal.startDate,
-                                    targetDate = detail.goal.targetDate,
-                                    color = detail.goal.color,
-                                )
-                            }
+                    val detail = goalRepository.observeGoalDetail(goalId).first { it != null }
+                    if (!hasLoadedInitialData && detail != null) {
+                        hasLoadedInitialData = true
+                        originalGoal = detail.goal
+                        _uiState.update { state ->
+                            state.copy(
+                                title = detail.goal.title,
+                                description = detail.goal.description.orEmpty(),
+                                targetValue = detail.goal.targetValue,
+                                unit = detail.goal.unit,
+                                startDate = detail.goal.startDate,
+                                targetDate = detail.goal.targetDate,
+                                color = detail.goal.color,
+                            )
                         }
                     }
                 }
@@ -98,25 +98,20 @@ class GoalEditViewModel
         }
 
         @Suppress("TooGenericExceptionCaught")
-        fun saveGoal(
-            titleRequiredError: String,
-            targetValueError: String,
-            unitRequiredError: String,
-            dataNotReadyError: String,
-        ) {
+        fun saveGoal() {
             val state = _uiState.value
             var hasError = false
 
             if (state.title.isBlank()) {
-                _uiState.update { it.copy(titleError = titleRequiredError) }
+                _uiState.update { it.copy(titleError = GoalEditValidationError.TITLE_REQUIRED) }
                 hasError = true
             }
             if (state.targetValue <= 0) {
-                _uiState.update { it.copy(targetValueError = targetValueError) }
+                _uiState.update { it.copy(targetValueError = GoalEditValidationError.TARGET_VALUE_INVALID) }
                 hasError = true
             }
             if (state.unit.isBlank()) {
-                _uiState.update { it.copy(unitError = unitRequiredError) }
+                _uiState.update { it.copy(unitError = GoalEditValidationError.UNIT_REQUIRED) }
                 hasError = true
             }
             if (hasError) return
@@ -138,7 +133,7 @@ class GoalEditViewModel
                     } else {
                         val original =
                             originalGoal ?: run {
-                                _events.send(GoalEditEvent.ShowSnackbar(dataNotReadyError))
+                                _events.send(GoalEditEvent.DataNotReady)
                                 _uiState.update { it.copy(isSaving = false) }
                                 return@launch
                             }

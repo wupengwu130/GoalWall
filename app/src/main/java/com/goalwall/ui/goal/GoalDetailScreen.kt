@@ -105,12 +105,8 @@ fun GoalDetailScreen(
     ) { innerPadding ->
         GoalDetailBody(
             uiState = uiState,
-            onDecrease = { currentValue ->
-                viewModel.setCurrentValue(currentValue - 1)
-            },
-            onIncrease = { currentValue ->
-                viewModel.setCurrentValue(currentValue + 1)
-            },
+            onDecrease = { viewModel.incrementCurrentValue(-1) },
+            onIncrease = { viewModel.incrementCurrentValue(1) },
             onMilestoneCheckedChange = viewModel::toggleMilestone,
             modifier =
                 Modifier
@@ -124,8 +120,8 @@ fun GoalDetailScreen(
 @Composable
 private fun GoalDetailBody(
     uiState: GoalDetailUiState,
-    onDecrease: (Int) -> Unit,
-    onIncrease: (Int) -> Unit,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
     onMilestoneCheckedChange: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -178,19 +174,13 @@ private fun GoalDetailBody(
 private fun GoalDetailContent(
     detail: GoalDetail,
     progressHistory: List<ProgressRecord>,
-    onDecrease: (Int) -> Unit,
-    onIncrease: (Int) -> Unit,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
     onMilestoneCheckedChange: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val goal = detail.goal
-    val derivedProgress =
-        if (goal.targetValue > 0) {
-            (goal.currentValue.toFloat() / goal.targetValue.toFloat()).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-    val progressPercent = (derivedProgress * 100).toInt()
+    val progressPercent = (goal.progress * 100).toInt()
     val dateFormatter = remember { DateFormat.getDateInstance(DateFormat.MEDIUM) }
 
     LazyColumn(
@@ -200,7 +190,6 @@ private fun GoalDetailContent(
     ) {
         goalDetailSummaryItems(
             goal = goal,
-            derivedProgress = derivedProgress,
             progressPercent = progressPercent,
             onDecrease = onDecrease,
             onIncrease = onIncrease,
@@ -218,10 +207,9 @@ private fun GoalDetailContent(
 
 private fun LazyListScope.goalDetailSummaryItems(
     goal: Goal,
-    derivedProgress: Float,
     progressPercent: Int,
-    onDecrease: (Int) -> Unit,
-    onIncrease: (Int) -> Unit,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
 ) {
     item {
         Text(
@@ -257,15 +245,15 @@ private fun LazyListScope.goalDetailSummaryItems(
     }
     item {
         GoalProgressBar(
-            progress = derivedProgress,
+            progress = goal.progress,
             modifier = Modifier.fillMaxWidth(),
         )
     }
     item {
         GoalDetailStepper(
             currentValue = goal.currentValue,
-            onDecrease = { onDecrease(goal.currentValue) },
-            onIncrease = { onIncrease(goal.currentValue) },
+            onDecrease = onDecrease,
+            onIncrease = onIncrease,
         )
     }
 }

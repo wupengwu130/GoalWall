@@ -27,6 +27,12 @@ interface GoalDao {
     @Query("SELECT * FROM goals WHERE id = :goalId")
     fun observeWithMilestones(goalId: Long): Flow<GoalWithMilestones?>
 
+    @Query("SELECT * FROM goals WHERE id = :goalId")
+    suspend fun getById(goalId: Long): GoalEntity?
+
+    @Query("SELECT COUNT(*) FROM goals WHERE status = :status")
+    suspend fun countByStatus(status: GoalStatus): Int
+
     @Query(
         """
         SELECT * FROM goals

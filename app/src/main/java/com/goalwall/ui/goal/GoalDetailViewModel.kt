@@ -84,24 +84,15 @@ class GoalDetailViewModel
                 .launchIn(viewModelScope)
         }
 
-        fun setCurrentValue(
-            newValue: Int,
+        fun incrementCurrentValue(
+            delta: Int,
             note: String? = null,
         ) {
             viewModelScope.launch {
-                val detail = _uiState.value.detail ?: return@launch
-                val oldValue = detail.goal.currentValue
-                val boundedNewValue =
-                    newValue.coerceIn(
-                        0,
-                        detail.goal.targetValue,
-                    )
-                val delta = boundedNewValue - oldValue
-                goalRepository.updateCurrentValue(goalId, boundedNewValue)
-                if (delta != 0) {
-                    progressRepository.recordProgress(goalId, delta, note)
+                val appliedDelta = goalRepository.incrementCurrentValue(goalId, delta, note)
+                if (appliedDelta != 0) {
+                    appContext.enqueueWidgetSync()
                 }
-                appContext.enqueueWidgetSync()
             }
         }
 

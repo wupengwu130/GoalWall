@@ -5,10 +5,14 @@
 // Forbidden imports: ui.**, worker.**, kotlinx.coroutines.Dispatchers
 package com.goalwall.data.repository
 
+import androidx.room.withTransaction
+import com.goalwall.data.db.GoalWallDatabase
 import com.goalwall.data.db.dao.GoalDao
 import com.goalwall.data.db.dao.MilestoneDao
+import com.goalwall.data.db.dao.ProgressDao
 import com.goalwall.data.db.entity.GoalEntity
 import com.goalwall.data.db.entity.MilestoneEntity
+import com.goalwall.data.db.entity.ProgressEntity
 import com.goalwall.data.model.Goal
 import com.goalwall.data.model.GoalDetail
 import com.goalwall.data.model.GoalStatus
@@ -24,8 +28,10 @@ import javax.inject.Singleton
 class GoalRepository
     @Inject
     constructor(
+        private val database: GoalWallDatabase,
         private val goalDao: GoalDao,
         private val milestoneDao: MilestoneDao,
+        private val progressDao: ProgressDao,
     ) {
         val goals: Flow<List<Goal>> =
             goalDao.observeAll().map { list -> list.map { it.toModel() } }
@@ -72,6 +78,40 @@ class GoalRepository
         ) {
             goalDao.updateCurrentValue(goalId, currentValue)
         }
+
+        suspend fun incrementCurrentValue(
+            goalId: Long,
+            delta: Int,
+            note: String? = null,
+        ): Int {
+            if (delta == 0) return 0
+
+            return database.withTransaction {
+                val goal = goalDao.getById(goalId) ?: return@withTransaction 0
+                val boundedNewValue = (goal.currentValue + delta).coerceIn(0, goal.targetValue)
+                val appliedDelta = boundedNewValue - goal.currentValue
+                if (appliedDelta != 0) {
+                    val now = System.currentTimeMillis()
+                    goalDao.updateCurrentValue(
+                        id = goalId,
+                        currentValue = boundedNewValue,
+                        now = now,
+                    )
+                    progressDao.insert(
+                        ProgressEntity(
+                            goalId = goalId,
+                            value = appliedDelta,
+                            note = note,
+                            recordDate = now,
+                            createdAt = now,
+                        ),
+                    )
+                }
+                appliedDelta
+            }
+        }
+
+        suspend fun countGoalsByStatus(status: GoalStatus): Int = goalDao.countByStatus(status)
 
         suspend fun setStatus(
             goalId: Long,

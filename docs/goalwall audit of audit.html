@@ -1,0 +1,83 @@
+import { Card, CardBody, CardHeader, Code, Grid, H1, H2, Pill, Stack, Table, Text } from "cursor/canvas";
+
+const itemRows = [
+  ["严重 #1", "赞同，但分级略高", "删除空 Worker；若已发布，先取消/兼容旧 workName，避免 ClassNotFound 或遗留调度。"],
+  ["严重 #2", "赞同", "改用 Goal.progress；属于单一真相源问题，严重度更像中风险。"],
+  ["严重 #3", "修正", "不要把 fallbackToDestructiveMigration 当默认修复；Release 必须真实 Migration + schema + migration test。"],
+  ["警告 #4", "赞同", "DAO COUNT(*) 更合适；建议按 GoalStatus 参数查询，避免硬编码枚举字符串漂移。"],
+  ["警告 #5", "赞同并升级", "ViewModel 输出 typed validation error，Screen 映射 stringResource；不要传 UI 文案进 VM。"],
+  ["警告 #6", "修正为建模问题", "Dashboard 需要显式统计口径；长期应把 archived 从 status 中拆成独立维度。"],
+  ["优化 #7", "补充", "颜色应收敛到 theme/palette，但持久化 hex 与 Compose Color 要分层转换。"],
+  ["优化 #8", "赞同", "提取 SettingsUiState 保持模块约定；低风险低优先级。"],
+  ["优化 #9", "修正", "Mutex 只能局部串行化，不能解决 stale UI 参数、双写非事务、跨入口并发。"],
+];
+
+const missedRows = [
+  ["进度双写非事务", "currentValue 更新和 ProgressEntity 插入分两次 DAO 调用；失败或并发会让累计值与历史增量不一致。"],
+  ["连点 stale 参数", "按钮闭包用旧 currentValue 计算 newValue；快速点击可能多次提交同一个绝对值。"],
+  ["编辑 targetValue 缩小", "保存目标不会收敛 currentValue；可能长期保持 currentValue > targetValue。"],
+  ["Widget 刷新覆盖不全", "GoalListViewModel 目前没有归档/删除入口触发；Repository 写操作也不统一触发副作用。"],
+  ["GoalEdit 初始加载", "collect 持续存在但只用第一次结果；可改 first/take(1) 降低无效收集。"],
+  ["完成与归档语义耦合", "GoalStatus 同时承载生命周期和归档可见性，归档已完成目标会丢失完成语义。"],
+];
+
+export default function GoalWallAuditOfAudit() {
+  return (
+    <Stack gap={18} style={{ padding: 24 }}>
+      <Stack gap={6}>
+        <H1>GoalWall 审计报告复核</H1>
+        <Text tone="secondary">
+          结论：原报告抓住了多数方向性问题，但对 Room Migration 与进度并发的修复建议过于粗糙；Dashboard 的问题本质是业务语义建模，而不只是选择 goals/allGoals。
+        </Text>
+      </Stack>
+
+      <Grid columns={3} gap={12}>
+        <Card>
+          <CardHeader trailing={<Pill tone="danger">高优先级</Pill>}>必须修正</CardHeader>
+          <CardBody>
+            <Text>Room 迁移策略、进度原子更新、Dashboard 统计口径。</Text>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader trailing={<Pill tone="warning">中优先级</Pill>}>建议补充</CardHeader>
+          <CardBody>
+            <Text>Typed validation error、COUNT 查询、Widget/Worker 生命周期边界。</Text>
+          </CardBody>
+        </Card>
+        <Card>
+          <CardHeader trailing={<Pill tone="neutral">低优先级</Pill>}>可后置</CardHeader>
+          <CardBody>
+            <Text>SettingsUiState 拆文件、颜色常量收敛、详情页重复公式。</Text>
+          </CardBody>
+        </Card>
+      </Grid>
+
+      <Stack gap={8}>
+        <H2>逐项复核</H2>
+        <Table
+          headers={["条目", "判断", "推荐方向"]}
+          rows={itemRows}
+          rowTone={["warning", "info", "danger", "info", "warning", "danger", "neutral", "neutral", "danger"]}
+        />
+      </Stack>
+
+      <Stack gap={8}>
+        <H2>报告遗漏风险</H2>
+        <Table headers={["遗漏点", "为什么重要"]} rows={missedRows} rowTone={["danger", "danger", "warning", "warning", "neutral", "danger"]} />
+      </Stack>
+
+      <Card>
+        <CardHeader>首选修复模型</CardHeader>
+        <CardBody>
+          <Text>
+            把 UI 的 <Code>setCurrentValue(newAbsoluteValue)</Code> 改成意图型操作，例如 <Code>incrementProgress(delta)</Code>；
+            数据层在一个 Room transaction 内读取当前值、计算 bounded value、更新 goals、插入 progress_records，并返回实际 appliedDelta。
+          </Text>
+          <Text>
+            Dashboard 则显式定义统计口径：all-time total、active count、archived count、completed count、active average progress。长期最好将归档拆为 <Code>archivedAt</Code>，不要与完成/暂停状态共用一个 enum。
+          </Text>
+        </CardBody>
+      </Card>
+    </Stack>
+  );
+}
