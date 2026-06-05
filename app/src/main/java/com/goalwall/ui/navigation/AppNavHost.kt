@@ -5,24 +5,19 @@
 // Forbidden imports: data.**, androidx.room.**
 package com.goalwall.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.goalwall.R
+import com.goalwall.ui.dashboard.DashboardScreen
 import com.goalwall.ui.goal.GoalDetailScreen
 import com.goalwall.ui.goal.GoalEditScreen
 import com.goalwall.ui.goal.GoalListScreen
+import com.goalwall.ui.settings.SettingsScreen
 
 @Suppress("FunctionName")
 @Composable
@@ -46,10 +41,14 @@ fun AppNavHost(
             )
         }
         composable(Screen.Dashboard.route) {
-            PlaceholderScreen(stringResource(R.string.nav_placeholder_dashboard))
+            DashboardScreen(
+                onGoalClick = { goalId ->
+                    navController.navigate(Screen.GoalDetail.createRoute(goalId))
+                },
+            )
         }
         composable(Screen.Settings.route) {
-            PlaceholderScreen(stringResource(R.string.nav_placeholder_settings))
+            SettingsScreen()
         }
         composable(
             route = Screen.GoalDetail.ROUTE,
@@ -65,38 +64,27 @@ fun AppNavHost(
                     navController.popBackStack()
                 },
                 onNavigateToEdit = { goalId ->
-                    navController.navigate(Screen.GoalEdit.createRoute(goalId))
+                    navController.navigate(Screen.GoalEdit.editRoute(goalId))
                 },
             )
         }
-        composable(
-            route = Screen.GoalEdit.ROUTE,
-            arguments =
-                listOf(
-                    navArgument("goalId") {
-                        type = NavType.LongType
-                        nullable = true
-                        defaultValue = null
-                    },
-                ),
-        ) { _ ->
+        composable(route = Screen.GoalEdit.ROUTE_CREATE) {
             GoalEditScreen(
                 onNavigateBack = { navController.popBackStack() },
             )
         }
-    }
-}
-
-@Suppress("FunctionName")
-@Composable
-private fun PlaceholderScreen(text: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleLarge,
-        )
+        composable(
+            route = Screen.GoalEdit.ROUTE_EDIT,
+            arguments =
+                listOf(
+                    navArgument("goalId") {
+                        type = NavType.LongType
+                    },
+                ),
+        ) {
+            GoalEditScreen(
+                onNavigateBack = { navController.popBackStack() },
+            )
+        }
     }
 }

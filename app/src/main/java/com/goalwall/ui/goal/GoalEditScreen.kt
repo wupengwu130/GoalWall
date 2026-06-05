@@ -46,7 +46,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.goalwall.R
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -84,20 +82,17 @@ fun GoalEditScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     val errorTitleRequired = stringResource(R.string.goal_edit_error_title_required)
     val errorTargetValue = stringResource(R.string.goal_edit_error_target_value_positive)
     val errorUnitRequired = stringResource(R.string.goal_edit_error_unit_required)
+    val errorDataNotReady = stringResource(R.string.goal_edit_error_data_not_ready)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 is GoalEditEvent.NavigateBack -> onNavigateBack()
-                is GoalEditEvent.ShowSnackbar ->
-                    scope.launch {
-                        snackbarHostState.showSnackbar(event.message)
-                    }
+                is GoalEditEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
     }
@@ -136,6 +131,7 @@ fun GoalEditScreen(
             errorTitleRequired = errorTitleRequired,
             errorTargetValue = errorTargetValue,
             errorUnitRequired = errorUnitRequired,
+            errorDataNotReady = errorDataNotReady,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -155,6 +151,7 @@ private fun GoalEditForm(
     errorTitleRequired: String,
     errorTargetValue: String,
     errorUnitRequired: String,
+    errorDataNotReady: String,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -184,6 +181,7 @@ private fun GoalEditForm(
                     titleRequiredError = errorTitleRequired,
                     targetValueError = errorTargetValue,
                     unitRequiredError = errorUnitRequired,
+                    dataNotReadyError = errorDataNotReady,
                 )
             },
             enabled = !uiState.isSaving,
@@ -272,10 +270,11 @@ private fun GoalEditStartDatePicker(
         modifier = modifier.fillMaxWidth(),
     ) {
         Text(
-            text =
-                stringResource(R.string.goal_edit_label_start_date) +
-                    ": " +
-                    startDateFormatted,
+            stringResource(
+                R.string.goal_edit_date_format,
+                stringResource(R.string.goal_edit_label_start_date),
+                startDateFormatted,
+            ),
         )
     }
 
@@ -326,13 +325,12 @@ private fun GoalEditTargetDatePicker(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(
-                text =
-                    stringResource(R.string.goal_edit_label_target_date) +
-                        ": " +
-                        (
-                            targetDateFormatted
-                                ?: stringResource(R.string.goal_edit_label_target_date_none)
-                        ),
+                stringResource(
+                    R.string.goal_edit_date_format,
+                    stringResource(R.string.goal_edit_label_target_date),
+                    targetDateFormatted
+                        ?: stringResource(R.string.goal_edit_label_target_date_none),
+                ),
             )
         }
         if (targetDate != null) {

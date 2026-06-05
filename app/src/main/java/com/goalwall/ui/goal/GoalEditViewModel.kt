@@ -5,12 +5,15 @@
 // Forbidden imports: data.db.**, androidx.room.**, androidx.navigation.**
 package com.goalwall.ui.goal
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.goalwall.data.model.Goal
 import com.goalwall.data.repository.GoalRepository
+import com.goalwall.worker.enqueueWidgetSync
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +28,7 @@ import javax.inject.Inject
 class GoalEditViewModel
     @Inject
     constructor(
+        @ApplicationContext private val appContext: Context,
         private val goalRepository: GoalRepository,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
@@ -98,6 +102,7 @@ class GoalEditViewModel
             titleRequiredError: String,
             targetValueError: String,
             unitRequiredError: String,
+            dataNotReadyError: String,
         ) {
             val state = _uiState.value
             var hasError = false
@@ -131,7 +136,12 @@ class GoalEditViewModel
                             color = state.color,
                         )
                     } else {
-                        val original = originalGoal ?: return@launch
+                        val original =
+                            originalGoal ?: run {
+                                _events.send(GoalEditEvent.ShowSnackbar(dataNotReadyError))
+                                _uiState.update { it.copy(isSaving = false) }
+                                return@launch
+                            }
                         goalRepository.updateGoal(
                             original.copy(
                                 title = state.title,
@@ -141,9 +151,11 @@ class GoalEditViewModel
                                 startDate = state.startDate,
                                 targetDate = state.targetDate,
                                 color = state.color,
+                                updatedAt = System.currentTimeMillis(),
                             ),
                         )
                     }
+                    appContext.enqueueWidgetSync()
                     _events.send(GoalEditEvent.NavigateBack)
                 } catch (e: Exception) {
                     e.message?.takeIf { it.isNotBlank() }?.let { message ->

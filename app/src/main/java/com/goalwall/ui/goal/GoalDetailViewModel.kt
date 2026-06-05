@@ -1,16 +1,20 @@
 // Package: com.goalwall.ui.goal
 // Layer: UI — ViewModel
 // Responsibility: Observes goal detail and progress history, coordinates mutations.
-// Dependencies: GoalRepository, ProgressRepository, GoalDetailUiState, GoalDetailEvent
+// Dependencies: GoalRepository, ProgressRepository, NotificationHelper, GoalDetailUiState, GoalDetailEvent
 // Forbidden imports: androidx.room.**, com.goalwall.data.db.**, androidx.compose.**, androidx.navigation.**
 package com.goalwall.ui.goal
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.goalwall.data.repository.GoalRepository
 import com.goalwall.data.repository.ProgressRepository
+import com.goalwall.notification.NotificationHelper
+import com.goalwall.worker.enqueueWidgetSync
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,8 +31,10 @@ import javax.inject.Inject
 class GoalDetailViewModel
     @Inject
     constructor(
+        @ApplicationContext private val appContext: Context,
         private val goalRepository: GoalRepository,
         private val progressRepository: ProgressRepository,
+        private val notificationHelper: NotificationHelper,
         savedStateHandle: SavedStateHandle,
     ) : ViewModel() {
         private val goalId: Long =
@@ -95,6 +101,7 @@ class GoalDetailViewModel
                 if (delta != 0) {
                     progressRepository.recordProgress(goalId, delta, note)
                 }
+                appContext.enqueueWidgetSync()
             }
         }
 
@@ -103,7 +110,20 @@ class GoalDetailViewModel
             completed: Boolean,
         ) {
             viewModelScope.launch {
+                val detail = _uiState.value.detail ?: return@launch
+                val milestone =
+                    detail.milestones.find { it.id == milestoneId } ?: return@launch
+                val wasCompleted = milestone.completed
+
                 goalRepository.toggleMilestone(milestoneId, completed)
+
+                if (!wasCompleted && completed) {
+                    notificationHelper.showMilestoneAchieved(
+                        goalTitle = detail.goal.title,
+                        milestoneTitle = milestone.title,
+                    )
+                }
+                appContext.enqueueWidgetSync()
             }
         }
 
@@ -113,6 +133,7 @@ class GoalDetailViewModel
         ) {
             viewModelScope.launch {
                 goalRepository.addMilestone(goalId, title, targetValue)
+                appContext.enqueueWidgetSync()
             }
         }
 

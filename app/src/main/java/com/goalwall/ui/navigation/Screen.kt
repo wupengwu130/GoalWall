@@ -24,18 +24,13 @@ sealed class Screen(
         }
     }
 
-    data class GoalEdit(
-        val goalId: Long? = null,
-    ) : Screen(ROUTE) {
-        companion object {
-            const val ROUTE = "goal_edit?goalId={goalId}"
+    data object GoalEdit : Screen("goal_edit") {
+        const val ROUTE_CREATE = "goal_edit"
 
-            fun createRoute(goalId: Long? = null): String =
-                if (goalId != null) {
-                    "goal_edit?goalId=$goalId"
-                } else {
-                    "goal_edit"
-                }
-        }
+        const val ROUTE_EDIT = "goal_edit/{goalId}"
+
+        fun createRoute(): String = ROUTE_CREATE
+
+        fun editRoute(goalId: Long): String = "goal_edit/$goalId"
     }
 }

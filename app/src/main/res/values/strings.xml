@@ -57,4 +57,40 @@
     <string name="goal_edit_button_clear_date">清除</string>
     <string name="goal_edit_content_description_back">返回</string>
     <string name="goal_edit_content_description_color_option">颜色 %1$s</string>
+    <string name="goal_edit_error_data_not_ready">目标数据尚未加载，请稍候再试</string>
+    <string name="goal_edit_date_format">%1$s: %2$s</string>
+    <!-- DashboardScreen -->
+    <string name="dashboard_title">Goal Wall</string>
+    <string name="dashboard_section_stats">目标统计</string>
+    <string name="dashboard_section_top_goals">进度领先</string>
+    <string name="dashboard_stat_total">总目标</string>
+    <string name="dashboard_stat_completed">已完成</string>
+    <string name="dashboard_stat_avg_progress">平均进度</string>
+    <string name="dashboard_avg_progress_format">%.0f%%</string>
+    <string name="dashboard_no_goals">暂无目标，去新建一个吧</string>
+    <string name="dashboard_overall_progress_label">整体进度</string>
+    <!-- SettingsScreen -->
+    <string name="settings_title">设置</string>
+    <string name="settings_section_notification">通知</string>
+    <string name="settings_reminder_title">每日提醒</string>
+    <string name="settings_reminder_summary">每天 9:00 推送目标打卡提醒</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_theme_title">主题模式</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_section_about">关于</string>
+    <string name="settings_version_title">版本</string>
+    <!-- GoalWallWidget -->
+    <string name="widget_title">Goal Wall</string>
+    <string name="widget_description">查看进度最高的目标</string>
+    <string name="widget_empty">暂无目标，去新建一个吧</string>
+    <!-- Notification -->
+    <string name="notification_channel_reminder">目标提醒</string>
+    <string name="notification_channel_milestone">里程碑达成</string>
+    <string name="notification_channel_daily_summary">每日汇总</string>
+    <string name="reminder_notification_title">GoalWall Reminder</string>
+    <string name="reminder_notification_message">You have %1$d active goals to work on today.</string>
+    <string name="milestone_notification_title">Milestone Completed</string>
+    <string name="milestone_notification_message">Goal: %1$s\nMilestone: %2$s</string>
 </resources>
