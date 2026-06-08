@@ -83,15 +83,13 @@ fun GoalEditScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    val errorTitleRequired = stringResource(R.string.goal_edit_error_title_required)
-    val errorTargetValue = stringResource(R.string.goal_edit_error_target_value_positive)
-    val errorUnitRequired = stringResource(R.string.goal_edit_error_unit_required)
     val errorDataNotReady = stringResource(R.string.goal_edit_error_data_not_ready)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
                 is GoalEditEvent.NavigateBack -> onNavigateBack()
+                is GoalEditEvent.DataNotReady -> snackbarHostState.showSnackbar(errorDataNotReady)
                 is GoalEditEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
             }
         }
@@ -128,10 +126,6 @@ fun GoalEditScreen(
         GoalEditForm(
             uiState = uiState,
             viewModel = viewModel,
-            errorTitleRequired = errorTitleRequired,
-            errorTargetValue = errorTargetValue,
-            errorUnitRequired = errorUnitRequired,
-            errorDataNotReady = errorDataNotReady,
             modifier =
                 Modifier
                     .fillMaxSize()
@@ -148,10 +142,6 @@ fun GoalEditScreen(
 private fun GoalEditForm(
     uiState: GoalEditUiState,
     viewModel: GoalEditViewModel,
-    errorTitleRequired: String,
-    errorTargetValue: String,
-    errorUnitRequired: String,
-    errorDataNotReady: String,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -176,14 +166,7 @@ private fun GoalEditForm(
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = {
-                viewModel.saveGoal(
-                    titleRequiredError = errorTitleRequired,
-                    targetValueError = errorTargetValue,
-                    unitRequiredError = errorUnitRequired,
-                    dataNotReadyError = errorDataNotReady,
-                )
-            },
+            onClick = viewModel::saveGoal,
             enabled = !uiState.isSaving,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -212,7 +195,7 @@ private fun GoalEditTextFields(
             onValueChange = viewModel::onTitleChange,
             label = { Text(stringResource(R.string.goal_edit_label_title)) },
             isError = uiState.titleError != null,
-            supportingText = uiState.titleError?.let { { Text(it) } },
+            supportingText = uiState.titleError?.let { error -> { Text(error.toMessage()) } },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -233,7 +216,7 @@ private fun GoalEditTextFields(
             },
             label = { Text(stringResource(R.string.goal_edit_label_target_value)) },
             isError = uiState.targetValueError != null,
-            supportingText = uiState.targetValueError?.let { { Text(it) } },
+            supportingText = uiState.targetValueError?.let { error -> { Text(error.toMessage()) } },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
@@ -244,7 +227,7 @@ private fun GoalEditTextFields(
             onValueChange = viewModel::onUnitChange,
             label = { Text(stringResource(R.string.goal_edit_label_unit)) },
             isError = uiState.unitError != null,
-            supportingText = uiState.unitError?.let { { Text(it) } },
+            supportingText = uiState.unitError?.let { error -> { Text(error.toMessage()) } },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -411,3 +394,14 @@ private fun GoalEditColorPicker(
         }
     }
 }
+
+@Composable
+private fun GoalEditValidationError.toMessage(): String =
+    when (this) {
+        GoalEditValidationError.TITLE_REQUIRED ->
+            stringResource(R.string.goal_edit_error_title_required)
+        GoalEditValidationError.TARGET_VALUE_INVALID ->
+            stringResource(R.string.goal_edit_error_target_value_positive)
+        GoalEditValidationError.UNIT_REQUIRED ->
+            stringResource(R.string.goal_edit_error_unit_required)
+    }

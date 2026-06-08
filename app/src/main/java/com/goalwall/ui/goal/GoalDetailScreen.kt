@@ -19,7 +19,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -33,7 +36,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -76,42 +81,109 @@ fun GoalDetailScreen(
         modifier = modifier,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text =
-                            uiState.detail?.goal?.title
-                                ?: stringResource(R.string.goal_detail_title),
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.goal_detail_nav_back),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = viewModel::onEditClick) {
-                        Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = stringResource(R.string.goal_detail_edit),
-                        )
-                    }
-                },
+            GoalDetailTopBar(
+                title = uiState.detail?.goal?.title,
+                onNavigateBack = onNavigateBack,
+                onEditClick = viewModel::onEditClick,
+                onMarkCompleted = viewModel::markCompleted,
+                onPauseGoal = viewModel::pauseGoal,
+                onArchiveGoal = viewModel::archiveGoal,
             )
         },
     ) { innerPadding ->
         GoalDetailBody(
             uiState = uiState,
-            onDecrease = { viewModel.incrementCurrentValue(-1) },
-            onIncrease = { viewModel.incrementCurrentValue(1) },
+            onDecrease = viewModel::decrementProgress,
+            onIncrease = viewModel::incrementProgress,
             onMilestoneCheckedChange = viewModel::toggleMilestone,
             modifier =
                 Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
+        )
+    }
+}
+
+@Suppress("FunctionName")
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GoalDetailTopBar(
+    title: String?,
+    onNavigateBack: () -> Unit,
+    onEditClick: () -> Unit,
+    onMarkCompleted: () -> Unit,
+    onPauseGoal: () -> Unit,
+    onArchiveGoal: () -> Unit,
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    TopAppBar(
+        title = { Text(text = title ?: stringResource(R.string.goal_detail_title)) },
+        navigationIcon = {
+            IconButton(onClick = onNavigateBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.goal_detail_nav_back),
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Filled.Edit,
+                    contentDescription = stringResource(R.string.goal_detail_edit),
+                )
+            }
+            IconButton(onClick = { showMenu = true }) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.goal_detail_more_actions),
+                )
+            }
+            GoalDetailActionsMenu(
+                expanded = showMenu,
+                onDismiss = { showMenu = false },
+                onMarkCompleted = onMarkCompleted,
+                onPauseGoal = onPauseGoal,
+                onArchiveGoal = onArchiveGoal,
+            )
+        },
+    )
+}
+
+@Suppress("FunctionName")
+@Composable
+private fun GoalDetailActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onMarkCompleted: () -> Unit,
+    onPauseGoal: () -> Unit,
+    onArchiveGoal: () -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.goal_detail_action_mark_completed)) },
+            onClick = {
+                onDismiss()
+                onMarkCompleted()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.goal_detail_action_pause)) },
+            onClick = {
+                onDismiss()
+                onPauseGoal()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.goal_detail_action_archive)) },
+            onClick = {
+                onDismiss()
+                onArchiveGoal()
+            },
         )
     }
 }

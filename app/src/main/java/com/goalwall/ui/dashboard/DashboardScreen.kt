@@ -116,7 +116,10 @@ private fun DashboardLoadedContent(
             DashboardStatsRow(uiState = uiState)
         }
         item {
-            DashboardOverallProgressRing(averageProgress = uiState.averageProgress)
+            DashboardLifecycleStatsRow(uiState = uiState)
+        }
+        item {
+            DashboardOverallProgressRing(averageProgress = uiState.activeAverageProgress)
         }
         item {
             Text(
@@ -159,9 +162,34 @@ private fun DashboardStatsRow(uiState: DashboardUiState) {
             value =
                 stringResource(
                     R.string.dashboard_avg_progress_format,
-                    uiState.averageProgress * 100,
+                    uiState.activeAverageProgress * 100,
                 ),
             icon = Icons.Default.Refresh,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Suppress("FunctionName")
+@Composable
+private fun DashboardLifecycleStatsRow(uiState: DashboardUiState) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SummaryCard(
+            title = stringResource(R.string.dashboard_stat_active),
+            value = uiState.activeGoals.toString(),
+            icon = Icons.Default.Refresh,
+            modifier = Modifier.weight(1f),
+        )
+        SummaryCard(
+            title = stringResource(R.string.dashboard_stat_archived),
+            value = uiState.archivedGoals.toString(),
+            icon = Icons.Default.Star,
             modifier = Modifier.weight(1f),
         )
     }

@@ -9,8 +9,10 @@ import com.goalwall.data.model.Goal
 
 data class DashboardUiState(
     val totalGoals: Int = 0,
+    val activeGoals: Int = 0,
+    val archivedGoals: Int = 0,
     val completedGoals: Int = 0,
-    val averageProgress: Float = 0f,
+    val activeAverageProgress: Float = 0f,
     val topGoals: List<Goal> = emptyList(),
     val isLoading: Boolean = true,
 )

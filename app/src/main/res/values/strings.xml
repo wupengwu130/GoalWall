@@ -27,6 +27,10 @@
     <string name="goal_detail_empty">Goal not found</string>
     <string name="goal_detail_nav_back">Back</string>
     <string name="goal_detail_edit">Edit goal</string>
+    <string name="goal_detail_more_actions">More actions</string>
+    <string name="goal_detail_action_mark_completed">Mark Completed</string>
+    <string name="goal_detail_action_pause">Pause Goal</string>
+    <string name="goal_detail_action_archive">Archive Goal</string>
     <string name="goal_detail_value_with_unit">%1$d / %2$d %3$s</string>
     <string name="goal_detail_decrease_one">−1</string>
     <string name="goal_detail_increase_one">+1</string>
@@ -64,6 +68,8 @@
     <string name="dashboard_section_stats">目标统计</string>
     <string name="dashboard_section_top_goals">进度领先</string>
     <string name="dashboard_stat_total">总目标</string>
+    <string name="dashboard_stat_active">进行中</string>
+    <string name="dashboard_stat_archived">已归档</string>
     <string name="dashboard_stat_completed">已完成</string>
     <string name="dashboard_stat_avg_progress">平均进度</string>
     <string name="dashboard_avg_progress_format">%.0f%%</string>

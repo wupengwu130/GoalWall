@@ -24,10 +24,7 @@ class ReminderWorker
     ) : CoroutineWorker(appContext, workerParams) {
         override suspend fun doWork(): Result {
             if (userPreferences.reminderEnabled.first()) {
-                val activeCount =
-                    goalRepository.goals
-                        .first()
-                        .count { goal -> goal.status == GoalStatus.ACTIVE }
+                val activeCount = goalRepository.countGoalsByStatus(GoalStatus.ACTIVE)
 
                 if (activeCount > 0) {
                     notificationHelper.showDailyReminder(activeCount)

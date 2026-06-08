@@ -9,6 +9,7 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.goalwall.data.model.GoalStatus
 import com.goalwall.data.repository.GoalRepository
 import com.goalwall.data.repository.ProgressRepository
 import com.goalwall.notification.NotificationHelper
@@ -84,7 +85,15 @@ class GoalDetailViewModel
                 .launchIn(viewModelScope)
         }
 
-        fun incrementCurrentValue(
+        fun incrementProgress(note: String? = null) {
+            applyProgressDelta(delta = 1, note = note)
+        }
+
+        fun decrementProgress(note: String? = null) {
+            applyProgressDelta(delta = -1, note = note)
+        }
+
+        private fun applyProgressDelta(
             delta: Int,
             note: String? = null,
         ) {
@@ -124,6 +133,25 @@ class GoalDetailViewModel
         ) {
             viewModelScope.launch {
                 goalRepository.addMilestone(goalId, title, targetValue)
+                appContext.enqueueWidgetSync()
+            }
+        }
+
+        fun markCompleted() {
+            updateGoalStatus(GoalStatus.COMPLETED)
+        }
+
+        fun pauseGoal() {
+            updateGoalStatus(GoalStatus.PAUSED)
+        }
+
+        fun archiveGoal() {
+            updateGoalStatus(GoalStatus.ARCHIVED)
+        }
+
+        private fun updateGoalStatus(status: GoalStatus) {
+            viewModelScope.launch {
+                goalRepository.setStatus(goalId, status)
                 appContext.enqueueWidgetSync()
             }
         }

@@ -1,6 +1,6 @@
 // Package: com.goalwall.ui.dashboard
 // Layer: UI — ViewModel
-// Responsibility: 订阅 goalRepository.goals，派生仪表盘汇总统计
+// Responsibility: 订阅 goalRepository.allGoals，派生仪表盘汇总统计
 // Dependencies: GoalRepository
 // Forbidden imports: data.db.**, androidx.room.**, androidx.navigation.**
 package com.goalwall.ui.dashboard
@@ -28,21 +28,26 @@ class DashboardViewModel
         val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
         init {
-            goalRepository.goals
+            goalRepository.allGoals
                 .onEach { goals ->
+                    val nonArchived = goals.filter { it.status != GoalStatus.ARCHIVED }
+                    val activeGoals = goals.filter { it.status == GoalStatus.ACTIVE }
+
                     _uiState.update {
                         it.copy(
-                            totalGoals = goals.size,
-                            completedGoals = goals.count { g -> g.status == GoalStatus.COMPLETED },
-                            averageProgress =
-                                if (goals.isEmpty()) {
+                            totalGoals = nonArchived.size,
+                            activeGoals = activeGoals.size,
+                            archivedGoals = goals.count { goal -> goal.status == GoalStatus.ARCHIVED },
+                            completedGoals = nonArchived.count { goal -> goal.status == GoalStatus.COMPLETED },
+                            activeAverageProgress =
+                                if (activeGoals.isEmpty()) {
                                     0f
                                 } else {
-                                    goals.map { g -> g.progress }.average().toFloat()
+                                    activeGoals.map { goal -> goal.progress }.average().toFloat()
                                 },
                             topGoals =
-                                goals
-                                    .sortedByDescending { g -> g.progress }
+                                activeGoals
+                                    .sortedByDescending { goal -> goal.progress }
                                     .take(3),
                             isLoading = false,
                         )

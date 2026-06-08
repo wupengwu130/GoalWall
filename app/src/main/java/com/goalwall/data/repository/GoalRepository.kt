@@ -68,7 +68,13 @@ class GoalRepository
                 ),
             )
 
-        suspend fun updateGoal(goal: Goal) = goalDao.update(goal.toEntity())
+        suspend fun updateGoal(goal: Goal) {
+            val sanitizedGoal =
+                goal.copy(
+                    currentValue = goal.currentValue.coerceAtMost(goal.targetValue),
+                )
+            goalDao.update(sanitizedGoal.toEntity())
+        }
 
         suspend fun deleteGoal(goalId: Long) = goalDao.deleteById(goalId)
 
