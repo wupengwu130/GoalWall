@@ -5,7 +5,6 @@
 // Forbidden imports: data.db.**, data.repository.**, androidx.room.**
 package com.goalwall.ui.settings
 
-import android.content.pm.PackageManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -30,11 +29,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.goalwall.BuildConfig
 import com.goalwall.R
 import com.goalwall.data.UserPreferences
 
@@ -60,15 +59,8 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
     var showTimePicker by remember { mutableStateOf(false) }
-    val versionName =
-        remember(context) {
-            context.packageManager
-                .getPackageInfo(context.packageName, PackageManager.GET_META_DATA)
-                .versionName
-                .orEmpty()
-        }
+    val versionName = remember { BuildConfig.VERSION_NAME }
 
     if (showTimePicker) {
         ReminderTimePickerDialog(
@@ -206,7 +198,7 @@ private fun LazyListScope.settingsLanguageSection(
     item {
         SettingsSectionTitle(textRes = R.string.settings_section_language)
     }
-    items(languageOptionResources, key = { it.first }) { (value, labelRes) ->
+    items(languageOptionResources, key = { "language_${it.first}" }) { (value, labelRes) ->
         ListItem(
             headlineContent = { Text(stringResource(labelRes)) },
             leadingContent = {
@@ -237,7 +229,7 @@ private fun LazyListScope.settingsAppearanceSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
         )
     }
-    items(themeOptionResources, key = { it.first }) { (value, labelRes) ->
+    items(themeOptionResources, key = { "theme_${it.first}" }) { (value, labelRes) ->
         ListItem(
             headlineContent = { Text(stringResource(labelRes)) },
             leadingContent = {

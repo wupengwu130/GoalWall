@@ -13,6 +13,9 @@
         android:roundIcon="@drawable/ic_launcher_foreground"
         android:supportsRtl="true"
         android:theme="@style/Theme.GoalWall">
+        <property
+            android:name="android.app.locale_config"
+            android:resource="@xml/locales_config" />
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
