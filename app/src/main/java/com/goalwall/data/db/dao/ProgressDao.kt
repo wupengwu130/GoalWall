@@ -22,4 +22,7 @@ interface ProgressDao {
 
     @Query("SELECT COALESCE(SUM(value), 0) FROM progress_records WHERE goalId = :goalId")
     suspend fun sumValueByGoal(goalId: Long): Int
+
+    @Query("SELECT COUNT(*) FROM progress_records WHERE goalId = :goalId")
+    suspend fun countByGoal(goalId: Long): Int
 }

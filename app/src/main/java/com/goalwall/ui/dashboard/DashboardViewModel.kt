@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 
+private const val RECENTLY_COMPLETED_LIMIT = 5
+
 @HiltViewModel
 class DashboardViewModel
     @Inject
@@ -49,6 +51,11 @@ class DashboardViewModel
                                 activeGoals
                                     .sortedByDescending { goal -> goal.progress }
                                     .take(3),
+                            recentlyCompletedGoals =
+                                goals
+                                    .filter { goal -> goal.status == GoalStatus.COMPLETED }
+                                    .sortedByDescending { goal -> goal.updatedAt }
+                                    .take(RECENTLY_COMPLETED_LIMIT),
                             isLoading = false,
                         )
                     }

@@ -45,6 +45,8 @@ class GoalDetailViewModelTest {
         mockkStatic("com.goalwall.worker.WorkerExtensionsKt")
         every { appContext.enqueueWidgetSync() } just Runs
         every { progressRepository.observeProgressHistory(GOAL_ID) } returns flowOf(emptyList())
+        every { appContext.getString(any()) } returns "message"
+        every { appContext.getString(any(), any()) } returns "message"
     }
 
     @After
@@ -62,6 +64,45 @@ class GoalDetailViewModelTest {
             viewModel.incrementProgress()
 
             coVerify { goalRepository.incrementCurrentValue(GOAL_ID, 1, null) }
+            verify { appContext.enqueueWidgetSync() }
+        }
+
+    @Test
+    fun incrementProgress_five_callsRepositoryWithDeltaFive() =
+        runTest {
+            every { goalRepository.observeGoalDetail(GOAL_ID) } returns MutableStateFlow(goalDetail(completed = false))
+            coEvery { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_FIVE, null) } returns DELTA_FIVE
+            val viewModel = createViewModel()
+
+            viewModel.incrementProgress(delta = DELTA_FIVE)
+
+            coVerify { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_FIVE, null) }
+            verify { appContext.enqueueWidgetSync() }
+        }
+
+    @Test
+    fun incrementProgress_ten_callsRepositoryWithDeltaTen() =
+        runTest {
+            every { goalRepository.observeGoalDetail(GOAL_ID) } returns MutableStateFlow(goalDetail(completed = false))
+            coEvery { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_TEN, null) } returns DELTA_TEN
+            val viewModel = createViewModel()
+
+            viewModel.incrementProgress(delta = DELTA_TEN)
+
+            coVerify { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_TEN, null) }
+            verify { appContext.enqueueWidgetSync() }
+        }
+
+    @Test
+    fun incrementProgress_custom_callsRepositoryWithCustomDelta() =
+        runTest {
+            every { goalRepository.observeGoalDetail(GOAL_ID) } returns MutableStateFlow(goalDetail(completed = false))
+            coEvery { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_CUSTOM, null) } returns DELTA_CUSTOM
+            val viewModel = createViewModel()
+
+            viewModel.incrementProgress(delta = DELTA_CUSTOM)
+
+            coVerify { goalRepository.incrementCurrentValue(GOAL_ID, DELTA_CUSTOM, null) }
             verify { appContext.enqueueWidgetSync() }
         }
 
@@ -133,5 +174,8 @@ class GoalDetailViewModelTest {
     private companion object {
         const val GOAL_ID = 1L
         const val MILESTONE_ID = 10L
+        const val DELTA_FIVE = 5
+        const val DELTA_TEN = 10
+        const val DELTA_CUSTOM = 23
     }
 }

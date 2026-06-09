@@ -9,6 +9,8 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.goalwall.data.db.GoalWallDatabase
 import com.goalwall.data.db.entity.ProgressEntity
+import com.goalwall.data.model.GoalStatus
+import com.goalwall.data.model.SetStatusResult
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -22,6 +24,13 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(manifest = Config.NONE)
 class GoalRepositoryTest {
+    private companion object {
+        const val DELTA_FIVE = 5
+        const val DELTA_TEN = 10
+        const val DELTA_CUSTOM = 23
+        const val TARGET_PARTIAL_CLAMP = 95
+    }
+
     private lateinit var database: GoalWallDatabase
     private lateinit var repository: GoalRepository
 
@@ -73,6 +82,42 @@ class GoalRepositoryTest {
         }
 
     @Test
+    fun incrementCurrentValue_plusFive_updatesGoalAndInsertsProgress() =
+        runTest {
+            val goalId = insertGoal(targetValue = 20)
+
+            val appliedDelta = repository.incrementCurrentValue(goalId, delta = DELTA_FIVE)
+
+            assertGoalCurrentValue(goalId, expected = DELTA_FIVE)
+            assertProgressValues(goalId, listOf(DELTA_FIVE))
+            assertEquals(DELTA_FIVE, appliedDelta)
+        }
+
+    @Test
+    fun incrementCurrentValue_plusTen_updatesGoalAndInsertsProgress() =
+        runTest {
+            val goalId = insertGoal(targetValue = 50)
+
+            val appliedDelta = repository.incrementCurrentValue(goalId, delta = DELTA_TEN)
+
+            assertGoalCurrentValue(goalId, expected = DELTA_TEN)
+            assertProgressValues(goalId, listOf(DELTA_TEN))
+            assertEquals(DELTA_TEN, appliedDelta)
+        }
+
+    @Test
+    fun incrementCurrentValue_customDelta_updatesGoalAndInsertsProgress() =
+        runTest {
+            val goalId = insertGoal(targetValue = 100)
+
+            val appliedDelta = repository.incrementCurrentValue(goalId, delta = DELTA_CUSTOM)
+
+            assertGoalCurrentValue(goalId, expected = DELTA_CUSTOM)
+            assertProgressValues(goalId, listOf(DELTA_CUSTOM))
+            assertEquals(DELTA_CUSTOM, appliedDelta)
+        }
+
+    @Test
     fun incrementCurrentValue_aboveTarget_clampsAndReturnsAppliedDelta() =
         runTest {
             val goalId = insertGoal(targetValue = 2)
@@ -86,6 +131,19 @@ class GoalRepositoryTest {
         }
 
     @Test
+    fun incrementCurrentValue_partialClamp_recordsActualAppliedDelta() =
+        runTest {
+            val goalId = insertGoal(targetValue = 100)
+            repository.incrementCurrentValue(goalId, delta = TARGET_PARTIAL_CLAMP)
+
+            val appliedDelta = repository.incrementCurrentValue(goalId, delta = DELTA_TEN)
+
+            assertGoalCurrentValue(goalId, expected = 100)
+            assertProgressValues(goalId, listOf(TARGET_PARTIAL_CLAMP, DELTA_FIVE))
+            assertEquals(DELTA_FIVE, appliedDelta)
+        }
+
+    @Test
     fun incrementCurrentValue_belowZero_clampsAndReturnsAppliedDelta() =
         runTest {
             val goalId = insertGoal(targetValue = 3)
@@ -96,6 +154,29 @@ class GoalRepositoryTest {
             assertGoalCurrentValue(goalId, expected = 0)
             assertProgressValues(goalId, listOf(1, -1))
             assertEquals(-1, appliedDelta)
+        }
+
+    @Test
+    fun setStatus_archiveWithoutProgress_returnsArchiveNotAllowed() =
+        runTest {
+            val goalId = insertGoal(targetValue = 10)
+
+            val result = repository.setStatus(goalId, GoalStatus.ARCHIVED)
+
+            assertEquals(SetStatusResult.ARCHIVE_NOT_ALLOWED, result)
+            assertEquals(GoalStatus.ACTIVE, database.goalDao().getById(goalId)?.status)
+        }
+
+    @Test
+    fun setStatus_archiveWithProgress_succeeds() =
+        runTest {
+            val goalId = insertGoal(targetValue = 10)
+            repository.incrementCurrentValue(goalId, delta = 1)
+
+            val result = repository.setStatus(goalId, GoalStatus.ARCHIVED)
+
+            assertEquals(SetStatusResult.SUCCESS, result)
+            assertEquals(GoalStatus.ARCHIVED, database.goalDao().getById(goalId)?.status)
         }
 
     private suspend fun insertGoal(targetValue: Int): Long =

@@ -2,20 +2,27 @@ package com.goalwall.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.provideContent
+import androidx.glance.background
 import androidx.glance.layout.Column
 import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.unit.ColorProvider
+import com.goalwall.MainActivity
 import com.goalwall.R
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -40,6 +47,9 @@ class GoalWallWidget : GlanceAppWidget() {
                     GoalWallWidgetEntryPoint::class.java,
                 ).widgetDataProvider()
         val goals = widgetDataProvider.getTopGoals(limit = 3)
+        val topGoal = goals.firstOrNull()
+        val backgroundColor = parseWidgetColor(topGoal?.color)
+        val textColor = backgroundColor.toContrastTextColor()
         val titleText = context.getString(R.string.widget_title)
         val emptyText = context.getString(R.string.widget_empty)
         val goalItems =
@@ -66,6 +76,8 @@ class GoalWallWidget : GlanceAppWidget() {
                     title = titleText,
                     emptyText = emptyText,
                     goals = goalItems,
+                    backgroundColor = backgroundColor,
+                    textColor = textColor,
                 )
             }
         }
@@ -84,23 +96,30 @@ private fun GoalWallWidgetContent(
     title: String,
     emptyText: String,
     goals: List<GoalWallWidgetGoalItem>,
+    backgroundColor: Color,
+    textColor: Color,
 ) {
+    val textStyle = TextStyle(color = ColorProvider(textColor))
+    val titleStyle = TextStyle(fontWeight = FontWeight.Bold, color = ColorProvider(textColor))
+
     Column(
         modifier =
             GlanceModifier
-                .fillMaxWidth()
+                .fillMaxSize()
+                .background(backgroundColor)
+                .clickable(actionStartActivity<MainActivity>())
                 .padding(16.dp),
     ) {
         Text(
             text = title,
-            style = TextStyle(fontWeight = FontWeight.Bold),
+            style = titleStyle,
         )
         Spacer(modifier = GlanceModifier.height(8.dp))
         if (goals.isEmpty()) {
-            Text(text = emptyText)
+            Text(text = emptyText, style = textStyle)
         } else {
             goals.forEach { goal ->
-                GoalWallWidgetGoalRow(goal = goal)
+                GoalWallWidgetGoalRow(goal = goal, textStyle = textStyle)
                 Spacer(modifier = GlanceModifier.height(8.dp))
             }
         }
@@ -109,10 +128,13 @@ private fun GoalWallWidgetContent(
 
 @Suppress("FunctionName")
 @Composable
-private fun GoalWallWidgetGoalRow(goal: GoalWallWidgetGoalItem) {
+private fun GoalWallWidgetGoalRow(
+    goal: GoalWallWidgetGoalItem,
+    textStyle: TextStyle,
+) {
     Column(modifier = GlanceModifier.fillMaxWidth()) {
-        Text(text = goal.title)
-        Text(text = goal.valueText)
-        Text(text = goal.progressText)
+        Text(text = goal.title, style = textStyle)
+        Text(text = goal.valueText, style = textStyle)
+        Text(text = goal.progressText, style = textStyle)
     }
 }

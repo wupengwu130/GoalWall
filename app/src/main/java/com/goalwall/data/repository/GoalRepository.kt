@@ -16,6 +16,7 @@ import com.goalwall.data.db.entity.ProgressEntity
 import com.goalwall.data.model.Goal
 import com.goalwall.data.model.GoalDetail
 import com.goalwall.data.model.GoalStatus
+import com.goalwall.data.model.SetStatusResult
 import com.goalwall.data.model.toDetail
 import com.goalwall.data.model.toEntity
 import com.goalwall.data.model.toModel
@@ -122,8 +123,21 @@ class GoalRepository
         suspend fun setStatus(
             goalId: Long,
             status: GoalStatus,
-        ) {
-            goalDao.updateStatus(goalId, status)
+        ): SetStatusResult {
+            val goal = goalDao.getById(goalId)
+            val result =
+                when {
+                    goal == null -> SetStatusResult.GOAL_NOT_FOUND
+                    status == GoalStatus.ARCHIVED &&
+                        goal.status == GoalStatus.ACTIVE &&
+                        goal.currentValue <= 0 &&
+                        progressDao.countByGoal(goalId) == 0 -> SetStatusResult.ARCHIVE_NOT_ALLOWED
+                    else -> {
+                        goalDao.updateStatus(goalId, status)
+                        SetStatusResult.SUCCESS
+                    }
+                }
+            return result
         }
 
         suspend fun addMilestone(

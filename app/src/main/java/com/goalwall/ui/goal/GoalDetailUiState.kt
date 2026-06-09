@@ -19,6 +19,11 @@ data class GoalDetailUiState(
 sealed class GoalDetailEvent {
     data class ShowSnackbar(val message: String) : GoalDetailEvent()
 
+    data class ShowUndoableSnackbar(
+        val message: String,
+        val undoDelta: Int,
+    ) : GoalDetailEvent()
+
     data object NavigateBack : GoalDetailEvent()
 
     data class NavigateToEdit(val goalId: Long) : GoalDetailEvent()

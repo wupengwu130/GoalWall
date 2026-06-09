@@ -9,7 +9,9 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.goalwall.R
 import com.goalwall.data.model.GoalStatus
+import com.goalwall.data.model.SetStatusResult
 import com.goalwall.data.repository.GoalRepository
 import com.goalwall.data.repository.ProgressRepository
 import com.goalwall.notification.NotificationHelper
@@ -85,12 +87,32 @@ class GoalDetailViewModel
                 .launchIn(viewModelScope)
         }
 
-        fun incrementProgress(note: String? = null) {
-            applyProgressDelta(delta = 1, note = note)
+        fun incrementProgress(
+            delta: Int = 1,
+            note: String? = null,
+        ) {
+            applyProgressDelta(delta = delta, note = note)
         }
 
         fun decrementProgress(note: String? = null) {
             applyProgressDelta(delta = -1, note = note)
+        }
+
+        fun completeGoal() {
+            viewModelScope.launch {
+                val goal = _uiState.value.detail?.goal ?: return@launch
+                if (goal.currentValue >= goal.targetValue) return@launch
+                val delta = goal.targetValue - goal.currentValue
+                applyProgressDeltaInternal(
+                    delta = delta,
+                    note = null,
+                    completionMessage = appContext.getString(R.string.goal_detail_completed_message),
+                )
+            }
+        }
+
+        fun undoProgress(appliedDelta: Int) {
+            applyProgressDelta(delta = -appliedDelta)
         }
 
         private fun applyProgressDelta(
@@ -98,10 +120,27 @@ class GoalDetailViewModel
             note: String? = null,
         ) {
             viewModelScope.launch {
-                val appliedDelta = goalRepository.incrementCurrentValue(goalId, delta, note)
-                if (appliedDelta != 0) {
-                    appContext.enqueueWidgetSync()
-                }
+                applyProgressDeltaInternal(delta = delta, note = note)
+            }
+        }
+
+        private suspend fun applyProgressDeltaInternal(
+            delta: Int,
+            note: String? = null,
+            completionMessage: String? = null,
+        ) {
+            val appliedDelta = goalRepository.incrementCurrentValue(goalId, delta, note)
+            if (appliedDelta != 0) {
+                appContext.enqueueWidgetSync()
+                val message =
+                    completionMessage
+                        ?: appContext.getString(R.string.goal_detail_progress_increased, appliedDelta)
+                _events.send(
+                    GoalDetailEvent.ShowUndoableSnackbar(
+                        message = message,
+                        undoDelta = appliedDelta,
+                    ),
+                )
             }
         }
 
@@ -151,8 +190,16 @@ class GoalDetailViewModel
 
         private fun updateGoalStatus(status: GoalStatus) {
             viewModelScope.launch {
-                goalRepository.setStatus(goalId, status)
-                appContext.enqueueWidgetSync()
+                when (goalRepository.setStatus(goalId, status)) {
+                    SetStatusResult.SUCCESS -> appContext.enqueueWidgetSync()
+                    SetStatusResult.ARCHIVE_NOT_ALLOWED ->
+                        _events.send(
+                            GoalDetailEvent.ShowSnackbar(
+                                appContext.getString(R.string.goal_detail_archive_not_allowed),
+                            ),
+                        )
+                    SetStatusResult.GOAL_NOT_FOUND -> Unit
+                }
             }
         }
 

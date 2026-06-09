@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.CircularProgressIndicator
@@ -116,20 +117,21 @@ private fun DashboardLoadedContent(
             DashboardStatsRow(uiState = uiState)
         }
         item {
-            DashboardLifecycleStatsRow(uiState = uiState)
+            DashboardSecondaryStatsRow(uiState = uiState)
         }
         item {
             DashboardOverallProgressRing(averageProgress = uiState.activeAverageProgress)
         }
-        item {
-            Text(
-                text = stringResource(R.string.dashboard_section_top_goals),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
-        dashboardTopGoalsItems(
-            uiState = uiState,
+        dashboardGoalSection(
+            titleRes = R.string.dashboard_section_top_goals,
+            goals = uiState.topGoals,
+            emptyMessageRes = R.string.dashboard_no_goals,
+            onGoalClick = onGoalClick,
+        )
+        dashboardGoalSection(
+            titleRes = R.string.dashboard_section_recently_completed,
+            goals = uiState.recentlyCompletedGoals,
+            emptyMessageRes = R.string.dashboard_no_recently_completed,
             onGoalClick = onGoalClick,
         )
     }
@@ -152,9 +154,34 @@ private fun DashboardStatsRow(uiState: DashboardUiState) {
             modifier = Modifier.weight(1f),
         )
         SummaryCard(
+            title = stringResource(R.string.dashboard_stat_active),
+            value = uiState.activeGoals.toString(),
+            icon = Icons.Default.PlayArrow,
+            modifier = Modifier.weight(1f),
+        )
+        SummaryCard(
             title = stringResource(R.string.dashboard_stat_completed),
             value = uiState.completedGoals.toString(),
             icon = Icons.Default.CheckCircle,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+@Suppress("FunctionName")
+@Composable
+private fun DashboardSecondaryStatsRow(uiState: DashboardUiState) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        SummaryCard(
+            title = stringResource(R.string.dashboard_stat_archived),
+            value = uiState.archivedGoals.toString(),
+            icon = Icons.Default.Star,
             modifier = Modifier.weight(1f),
         )
         SummaryCard(
@@ -170,37 +197,20 @@ private fun DashboardStatsRow(uiState: DashboardUiState) {
     }
 }
 
-@Suppress("FunctionName")
-@Composable
-private fun DashboardLifecycleStatsRow(uiState: DashboardUiState) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        SummaryCard(
-            title = stringResource(R.string.dashboard_stat_active),
-            value = uiState.activeGoals.toString(),
-            icon = Icons.Default.Refresh,
-            modifier = Modifier.weight(1f),
-        )
-        SummaryCard(
-            title = stringResource(R.string.dashboard_stat_archived),
-            value = uiState.archivedGoals.toString(),
-            icon = Icons.Default.Star,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Suppress("FunctionName")
-private fun LazyListScope.dashboardTopGoalsItems(
-    uiState: DashboardUiState,
+private fun LazyListScope.dashboardGoalSection(
+    titleRes: Int,
+    goals: List<com.goalwall.data.model.Goal>,
+    emptyMessageRes: Int,
     onGoalClick: (Long) -> Unit,
 ) {
-    if (uiState.topGoals.isEmpty()) {
+    item {
+        Text(
+            text = stringResource(titleRes),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+    }
+    if (goals.isEmpty()) {
         item {
             Box(
                 modifier =
@@ -210,14 +220,14 @@ private fun LazyListScope.dashboardTopGoalsItems(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = stringResource(R.string.dashboard_no_goals),
+                    text = stringResource(emptyMessageRes),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
     } else {
-        items(uiState.topGoals, key = { it.id }) { goal ->
+        items(goals, key = { it.id }) { goal ->
             GoalCard(
                 goal = goal,
                 onClick = { onGoalClick(goal.id) },

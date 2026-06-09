@@ -14,5 +14,6 @@ data class DashboardUiState(
     val completedGoals: Int = 0,
     val activeAverageProgress: Float = 0f,
     val topGoals: List<Goal> = emptyList(),
+    val recentlyCompletedGoals: List<Goal> = emptyList(),
     val isLoading: Boolean = true,
 )

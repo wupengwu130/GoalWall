@@ -8,18 +8,21 @@ package com.goalwall.ui.goal
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -27,9 +30,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -42,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,6 +62,10 @@ import com.goalwall.ui.goal.components.MilestoneItem
 import java.text.DateFormat
 import java.util.Date
 
+private const val LARGE_TARGET_THRESHOLD = 10
+private const val QUICK_INCREMENT_FIVE = 5
+private const val QUICK_INCREMENT_TEN = 10
+
 @Suppress("FunctionName")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,11 +77,24 @@ fun GoalDetailScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val undoLabel = stringResource(R.string.action_undo)
 
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
             when (event) {
-                is GoalDetailEvent.ShowSnackbar -> snackbarHostState.showSnackbar(event.message)
+                is GoalDetailEvent.ShowSnackbar ->
+                    snackbarHostState.showSnackbar(event.message)
+                is GoalDetailEvent.ShowUndoableSnackbar -> {
+                    val result =
+                        snackbarHostState.showSnackbar(
+                            message = event.message,
+                            actionLabel = undoLabel,
+                            duration = SnackbarDuration.Short,
+                        )
+                    if (result == SnackbarResult.ActionPerformed) {
+                        viewModel.undoProgress(event.undoDelta)
+                    }
+                }
                 is GoalDetailEvent.NavigateBack -> onNavigateBack()
                 is GoalDetailEvent.NavigateToEdit -> onNavigateToEdit(event.goalId)
             }
@@ -94,7 +118,9 @@ fun GoalDetailScreen(
         GoalDetailBody(
             uiState = uiState,
             onDecrease = viewModel::decrementProgress,
-            onIncrease = viewModel::incrementProgress,
+            onIncrease = { viewModel.incrementProgress(delta = 1) },
+            onIncrementBy = viewModel::incrementProgress,
+            onCompleteGoal = viewModel::completeGoal,
             onMilestoneCheckedChange = viewModel::toggleMilestone,
             modifier =
                 Modifier
@@ -194,6 +220,8 @@ private fun GoalDetailBody(
     uiState: GoalDetailUiState,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
+    onIncrementBy: (Int) -> Unit,
+    onCompleteGoal: () -> Unit,
     onMilestoneCheckedChange: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -234,6 +262,8 @@ private fun GoalDetailBody(
                     progressHistory = uiState.progressHistory,
                     onDecrease = onDecrease,
                     onIncrease = onIncrease,
+                    onIncrementBy = onIncrementBy,
+                    onCompleteGoal = onCompleteGoal,
                     onMilestoneCheckedChange = onMilestoneCheckedChange,
                 )
             }
@@ -248,6 +278,8 @@ private fun GoalDetailContent(
     progressHistory: List<ProgressRecord>,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
+    onIncrementBy: (Int) -> Unit,
+    onCompleteGoal: () -> Unit,
     onMilestoneCheckedChange: (Long, Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -265,6 +297,8 @@ private fun GoalDetailContent(
             progressPercent = progressPercent,
             onDecrease = onDecrease,
             onIncrease = onIncrease,
+            onIncrementBy = onIncrementBy,
+            onCompleteGoal = onCompleteGoal,
         )
         milestoneSectionItems(
             milestones = detail.milestones,
@@ -282,6 +316,8 @@ private fun LazyListScope.goalDetailSummaryItems(
     progressPercent: Int,
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
+    onIncrementBy: (Int) -> Unit,
+    onCompleteGoal: () -> Unit,
 ) {
     item {
         Text(
@@ -310,10 +346,18 @@ private fun LazyListScope.goalDetailSummaryItems(
         )
     }
     item {
-        Text(
-            text = stringResource(R.string.goal_progress_percent, progressPercent),
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        if (goal.currentValue >= goal.targetValue) {
+            Text(
+                text = stringResource(R.string.goal_detail_status_completed),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.goal_progress_percent, progressPercent),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
     }
     item {
         GoalProgressBar(
@@ -322,12 +366,158 @@ private fun LazyListScope.goalDetailSummaryItems(
         )
     }
     item {
-        GoalDetailStepper(
-            currentValue = goal.currentValue,
+        GoalDetailProgressControls(
+            goal = goal,
             onDecrease = onDecrease,
             onIncrease = onIncrease,
+            onIncrementBy = onIncrementBy,
+            onCompleteGoal = onCompleteGoal,
         )
     }
+}
+
+@Suppress("FunctionName")
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun GoalDetailProgressControls(
+    goal: Goal,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit,
+    onIncrementBy: (Int) -> Unit,
+    onCompleteGoal: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isCompleted = goal.currentValue >= goal.targetValue
+    var showCustomDialog by remember { mutableStateOf(false) }
+
+    if (showCustomDialog) {
+        CustomIncrementDialog(
+            onDismiss = { showCustomDialog = false },
+            onConfirm = { delta ->
+                showCustomDialog = false
+                onIncrementBy(delta)
+            },
+        )
+    }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        if (isCompleted) {
+            Text(
+                text = stringResource(R.string.goal_detail_status_completed),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            return
+        }
+
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TextButton(onClick = onDecrease) {
+                Text(
+                    text = stringResource(R.string.goal_detail_decrease_one),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            Text(
+                text = goal.currentValue.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+            )
+            TextButton(onClick = onIncrease) {
+                Text(
+                    text = stringResource(R.string.goal_detail_increase_one),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            if (goal.targetValue > LARGE_TARGET_THRESHOLD) {
+                TextButton(onClick = { onIncrementBy(QUICK_INCREMENT_FIVE) }) {
+                    Text(
+                        text = stringResource(R.string.goal_detail_increase_five),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                TextButton(onClick = { onIncrementBy(QUICK_INCREMENT_TEN) }) {
+                    Text(
+                        text = stringResource(R.string.goal_detail_increase_ten),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                TextButton(onClick = { showCustomDialog = true }) {
+                    Text(
+                        text = stringResource(R.string.goal_detail_custom_increment),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+            TextButton(onClick = onCompleteGoal) {
+                Text(
+                    text = stringResource(R.string.goal_detail_complete_goal),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+        }
+    }
+}
+
+@Suppress("FunctionName")
+@Composable
+private fun CustomIncrementDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    var showError by remember { mutableStateOf(false) }
+    val parsedDelta = input.trim().toIntOrNull()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.goal_detail_custom_dialog_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = input,
+                    onValueChange = {
+                        input = it
+                        showError = false
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    isError = showError,
+                    supportingText =
+                        if (showError) {
+                            { Text(stringResource(R.string.goal_detail_custom_invalid_value)) }
+                        } else {
+                            null
+                        },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (parsedDelta == null || parsedDelta <= 0) {
+                        showError = true
+                    } else {
+                        onConfirm(parsedDelta)
+                    }
+                },
+            ) {
+                Text(stringResource(R.string.action_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        },
+    )
 }
 
 private fun LazyListScope.milestoneSectionItems(
@@ -389,38 +579,6 @@ private fun LazyListScope.progressHistorySectionItems(
             ProgressHistoryItem(
                 record = record,
                 dateFormatter = dateFormatter,
-            )
-        }
-    }
-}
-
-@Suppress("FunctionName")
-@Composable
-private fun GoalDetailStepper(
-    currentValue: Int,
-    onDecrease: () -> Unit,
-    onIncrease: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        TextButton(onClick = onDecrease) {
-            Text(
-                text = stringResource(R.string.goal_detail_decrease_one),
-                style = MaterialTheme.typography.titleLarge,
-            )
-        }
-        Text(
-            text = currentValue.toString(),
-            style = MaterialTheme.typography.headlineMedium,
-        )
-        TextButton(onClick = onIncrease) {
-            Text(
-                text = stringResource(R.string.goal_detail_increase_one),
-                style = MaterialTheme.typography.titleLarge,
             )
         }
     }
